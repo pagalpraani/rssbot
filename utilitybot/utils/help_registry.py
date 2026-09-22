@@ -26,16 +26,22 @@ class HelpRegistry:
         cls._registry[key] = (name, help_text, supported_chat_types)
 
     @classmethod
-    def get_all(cls, chat_type: Optional[str] = None) -> List[Tuple[str, str]]:
+    def get_all(cls, chat_type: Optional[str] = None, exclude_type: Optional[str] = None) -> List[Tuple[str, str]]:
         """
         Returns a list of (name, key) tuples sorted alphabetically by name.
-        If chat_type is provided, filters by supported types.
+        - If chat_type is provided, only entries supporting that type are returned.
+        - If exclude_type is provided, entries whose *only* supported type is
+          exclude_type are left out (used to list every regular module while
+          keeping the owner-only "dev" entries in their own section).
         """
         items = []
         for key, data in cls._registry.items():
             name, _, supported_types = data
             if chat_type:
                 if chat_type in supported_types:
+                    items.append((name, key))
+            elif exclude_type:
+                if supported_types != [exclude_type]:
                     items.append((name, key))
             else:
                 items.append((name, key))
