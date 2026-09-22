@@ -82,7 +82,7 @@ RSS_RELAY_BASE = get_env_variable(
 # that kept the same items in its XML for longer than 90 days would have
 # them "forgotten" and re-sent as if new. A count-based cap avoids that while
 # still bounding storage for long-running feeds.
-RSS_PROCESSED_CACHE_CAP = get_env_variable("RSS_PROCESSED_CACHE_CAP", is_int=True, default=2000)
+RSS_PROCESSED_CACHE_CAP = get_env_variable("RSS_PROCESSED_CACHE_CAP", is_int=True, default=1000)
 
 # Safety cap: the max number of items actually POSTED to a chat in a single
 # feed-check cycle. Protects against flooding a chat when a feed is linked
