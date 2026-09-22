@@ -76,15 +76,11 @@ def get_pagination_keyboard(items: list, page: int, items_per_page: int, callbac
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-@router.message(Command("rss"))
-async def rss_dashboard_cmd(message: Message, bot: Bot):
-    if message.chat.type != "private" or message.from_user.id != config.OWNER_ID:
-        return
-
+async def build_rss_home():
+    """Builds the (text, keyboard) for the RSS dashboard's chat-selector home screen."""
     chats = _sort_chats(await db.get_all_bot_chats())
     if not chats:
-        await message.reply("No chats found. Add the bot to a channel or group first.")
-        return
+        return "📡 <b>RSS Dashboard</b>\n\nNo chats found. Add me to a channel or group as admin first.", None
 
     kb = get_pagination_keyboard(
         chats, 0, 10, "rss_chat_",
@@ -94,7 +90,16 @@ async def rss_dashboard_cmd(message: Message, bot: Bot):
         )
     )
     kb.inline_keyboard.append([InlineKeyboardButton(text="➕ Add New Chat", callback_data="rss_add_new_chat")])
-    await message.reply("📡 <b>RSS Dashboard</b>\n\nSelect a chat to manage:", reply_markup=kb, parse_mode="HTML")
+    return "📡 <b>RSS Dashboard</b>\n\nSelect a chat to manage:", kb
+
+
+@router.message(Command("rss"))
+async def rss_dashboard_cmd(message: Message, bot: Bot):
+    if message.chat.type != "private" or message.from_user.id != config.OWNER_ID:
+        return
+
+    text, kb = await build_rss_home()
+    await message.reply(text, reply_markup=kb, parse_mode="HTML")
 
 @router.callback_query(F.data.startswith("rss_chat_page_"))
 async def rss_chat_page_cb(callback: CallbackQuery):
