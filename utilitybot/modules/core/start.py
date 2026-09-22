@@ -7,8 +7,11 @@
 
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import (
+    Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberUpdated,
+)
 from ...utils.logger import get_logger
+from ...database.mongodb import db
 import html
 
 log = get_logger(__name__)
@@ -106,3 +109,29 @@ async def about_callback(callback: CallbackQuery):
         await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     finally:
         await callback.answer()
+
+
+@router.my_chat_member()
+async def track_chat_membership(update: ChatMemberUpdated):
+    """
+    Keeps the bot_chats collection in sync with reality, so the RSS Dashboard's
+    chat list (and "Add New Chat" picker) reflects every chat the bot is
+    actually in — without needing the owner to add each one manually.
+    """
+    chat = update.chat
+    new_status = update.new_chat_member.status
+
+    if new_status in ("member", "administrator", "creator"):
+        try:
+            username = getattr(chat, "username", None) or ""
+            invite_link = getattr(chat, "invite_link", None) or ""
+            await db.add_bot_chat(chat.id, chat.title or str(chat.id), username, invite_link, chat.type)
+            log.info(f"Registered chat {chat.id} ({chat.title}) — status: {new_status}")
+        except Exception as e:
+            log.error(f"Failed to register chat {chat.id}: {e}")
+    elif new_status in ("left", "kicked"):
+        try:
+            await db.remove_bot_chat(chat.id)
+            log.info(f"Removed chat {chat.id} ({chat.title}) — bot was {new_status}")
+        except Exception as e:
+            log.error(f"Failed to remove chat {chat.id}: {e}")
