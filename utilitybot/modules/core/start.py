@@ -59,21 +59,33 @@ async def back_to_start(callback: CallbackQuery):
 
 @router.callback_query(F.data == "start_open_rss")
 async def start_open_rss(callback: CallbackQuery):
+    from ... import config
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer("⛔ Owner only.", show_alert=True)
+        return
+    from ..rss.dashboard import build_rss_home
+    text, kb = await build_rss_home()
+    kb_with_back = kb
+    if kb is not None:
+        kb.inline_keyboard.append([InlineKeyboardButton(text="◁ Back", callback_data="start_menu")])
     try:
-        await callback.answer(
-            "Run /rss inside the channel or group you want to manage.",
-            show_alert=True,
-        )
+        await callback.message.edit_text(text, reply_markup=kb_with_back, parse_mode="HTML")
     finally:
-        pass
+        await callback.answer()
 
 
 @router.callback_query(F.data == "start_open_help")
 async def start_open_help(callback: CallbackQuery):
+    from ... import config
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer("⛔ Owner only.", show_alert=True)
+        return
+    from .help import get_main_help_keyboard
+    help_text = "<b>❓ Help Center</b>\n\nSelect a module to see its commands."
     try:
-        await callback.answer("Use /help to see the full command list in PM.", show_alert=True)
+        await callback.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_main_help_keyboard())
     finally:
-        pass
+        await callback.answer()
 
 
 @router.callback_query(F.data == "about")
