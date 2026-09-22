@@ -75,3 +75,17 @@ RSS_RELAY_BASE = get_env_variable(
     "RSS_RELAY_BASE",
     default="https://media-relay.gurjar56.workers.dev"
 )
+
+# --- RSS Feed Item Cache ---
+# How many "already posted" item records to keep per feed, PERSISTENTLY (no
+# time-based expiry). Previously this used a 90-day TTL, which meant a feed
+# that kept the same items in its XML for longer than 90 days would have
+# them "forgotten" and re-sent as if new. A count-based cap avoids that while
+# still bounding storage for long-running feeds.
+RSS_PROCESSED_CACHE_CAP = get_env_variable("RSS_PROCESSED_CACHE_CAP", is_int=True, default=2000)
+
+# Safety cap: the max number of items actually POSTED to a chat in a single
+# feed-check cycle. Protects against flooding a chat when a feed is linked
+# for the first time (or has built up a large backlog) — anything older than
+# the newest N unseen items is silently marked as seen instead of being sent.
+RSS_MAX_NEW_ITEMS_PER_CYCLE = get_env_variable("RSS_MAX_NEW_ITEMS_PER_CYCLE", is_int=True, default=30)
