@@ -1,252 +1,790 @@
 # =============================================================================
-# Module: Core Settings Dashboard
+# Module: Core
 # Path: utilitybot/modules/core/settings.py
-# Description: Generic /settings dashboard that renders and edits every module
-#              registered in SettingsRegistry (blocklist, marginals, replacements,
-#              watermark, logging, general). RSS has its own dedicated /rss
-#              dashboard (modules/rss/dashboard.py) and is not driven from here.
+# Description: Provides core logic and data structures for settings.py.
+# Scope: private | channel | group
 # =============================================================================
 
-import re
-from aiogram import Router, F, Bot
-from aiogram.filters import Command, StateFilter
-from aiogram.types import Message, CallbackQuery
+from aiogram import Router, F, Bot, types
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
+from ...utils import settings_cache
 from ...database.mongodb import db
-from ...utils.settings_layout import SettingsRegistry, SettingsCallback, LayoutBuilder
-from ...utils.permissions import is_admin
-from ...utils import admin_cache
+from ...utils.settings_layout import SettingsRegistry, LayoutBuilder, SettingsCallback
+from ...utils.permissions import owner_only
+from ...utils.keyboards import get_cancel_kb
 from ...utils.logger import get_logger
+from ... import config
+import html
+import re
 
 log = get_logger(__name__)
+from datetime import datetime, timedelta, timezone
+
 router = Router()
 
+class SettingsState(StatesGroup):
+    waiting_for_input = State()
+    waiting_for_add_chat_id = State()
 
-class SettingsInputState(StatesGroup):
-    waiting_value = State()
+# --- Helper Functions ---
+async def get_collection_data(chat_id: int, collection_name: str) -> dict:
+    """Fetch settings data based on the collection name."""
+    if chat_id == 0:
+        # Developer/Global Settings
+        return await db.db.settings.find_one({"_id": "bot_config"}) or {}
 
+    return await db.get_settings(chat_id) or {}
 
-# --- Entry points ---------------------------------------------------------
-
-@router.message(Command("settings", prefix="!/"), F.chat.type.in_({"group", "supergroup", "channel"}))
-async def settings_in_chat(message: Message, bot: Bot):
-    """Run /settings directly inside the chat you want to configure."""
-    if not message.from_user or not await is_admin(bot, message.chat.id, message.from_user.id):
+async def update_collection_data(chat_id: int, collection_name: str, data: dict):
+    """Update settings data based on the collection name."""
+    if chat_id == 0:
+        # Developer/Global Settings
+        await db.db.settings.update_one({"_id": "bot_config"}, {"$set": data}, upsert=True)
         return
 
-    # Link this chat to the caller so it also shows up in their PM selector.
-    await db.add_managed_group(
-        message.from_user.id, message.chat.id,
-        message.chat.title or str(message.chat.id), message.chat.type,
-    )
-
-    kb = LayoutBuilder.build_module_selector(message.chat, page=0)
-    await message.reply(
-        f"⚙️ <b>{message.chat.title or 'This chat'}</b>\nSelect a module to configure:",
-        parse_mode="HTML", reply_markup=kb,
-    )
-
+    await db.update_settings(chat_id, data)
 
 @router.message(Command("settings", prefix="!/"), F.chat.type == "private")
-async def settings_in_pm(message: Message):
-    """Run /settings in PM to pick from chats you've configured before."""
+@owner_only
+async def settings_handler(message: types.Message, state: FSMContext):
+    if message.from_user.id != config.OWNER_ID:
+        return
+
+    # Delete previous settings message if it exists, to avoid duplicates
+    data = await state.get_data()
+    prev_msg_id = data.get("settings_msg_id")
+    if prev_msg_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=prev_msg_id)
+        except Exception:
+            pass
+
     groups = await db.get_managed_groups(message.from_user.id)
-    kb = LayoutBuilder.build_group_selector(groups, page=0, user_id=message.from_user.id)
-    await message.answer(
-        "⚙️ <b>Settings</b>\n\nSelect a chat to configure:",
-        parse_mode="HTML", reply_markup=kb,
+    markup = LayoutBuilder.build_group_selector(groups, user_id=message.from_user.id)
+
+    sent = await message.answer(
+        "⚙️ <b>Global Settings Manager</b>\nSelect a chat to configure:",
+        reply_markup=markup,
+        parse_mode="HTML"
+    )
+    await state.update_data(settings_msg_id=sent.message_id)
+
+    # Delete the command message to keep the chat clean
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(Command("settings", prefix="!/"), F.chat.type.in_({"group", "supergroup", "channel"}))
+async def settings_handler_in_chat(message: types.Message, bot: Bot):
+    """Run /settings directly inside a chat to jump straight to its module list."""
+    if message.from_user.id != config.OWNER_ID:
+        return
+
+    await db.add_managed_group(message.from_user.id, message.chat.id, message.chat.title or str(message.chat.id), message.chat.type)
+
+    markup = LayoutBuilder.build_module_selector(message.chat, page=0)
+    icon = "📢" if message.chat.type == "channel" else "💬"
+    await message.reply(
+        f"{icon} <b>{html.escape(message.chat.title or str(message.chat.id))}</b>\nSelect a module to configure:",
+        reply_markup=markup,
+        parse_mode="HTML"
     )
 
-
-# --- Helpers ----------------------------------------------------------------
-
-async def _chat_title_type(bot: Bot, chat_id: int):
-    try:
-        chat = await bot.get_chat(chat_id)
-        return chat.title or str(chat_id), chat.type
-    except Exception:
-        return str(chat_id), "group"
-
-
-async def _render_dashboard(chat_id: int, mod: str, bot: Bot):
-    settings = await db.get_settings(chat_id)
-    title, chat_type = await _chat_title_type(bot, chat_id)
-    return LayoutBuilder.build_dashboard(chat_id, mod, settings, chat_title=title, chat_type=chat_type)
-
-
-# --- Callback router ---------------------------------------------------------
-
-@router.callback_query(SettingsCallback.filter())
-async def settings_callback(callback: CallbackQuery, callback_data: SettingsCallback, state: FSMContext, bot: Bot):
-    level = callback_data.level
-    chat_id = callback_data.chat_id
-    user_id = callback.from_user.id
-
-    # Any navigation other than "input" cancels a pending text-input flow.
-    if level != "input":
-        await state.clear()
-
-    # Re-verify the caller is still an admin of the target chat (except for the
-    # chat-agnostic "home"/"dev_home" screens where chat_id is 0/unset).
-    if chat_id and not await is_admin(bot, chat_id, user_id):
-        await callback.answer("You're not an admin of that chat anymore.", show_alert=True)
-        return
-
-    if level == "home":
-        groups = await db.get_managed_groups(user_id)
-        kb = LayoutBuilder.build_group_selector(groups, page=callback_data.page, user_id=user_id)
-        await callback.message.edit_text("⚙️ <b>Settings</b>\n\nSelect a chat to configure:", parse_mode="HTML", reply_markup=kb)
-
-    elif level == "refresh":
-        groups = await db.get_managed_groups(user_id)
-        kb = LayoutBuilder.build_group_selector(groups, page=callback_data.page, user_id=user_id)
-        await callback.message.edit_text("⚙️ <b>Settings</b>\n\nSelect a chat to configure:", parse_mode="HTML", reply_markup=kb)
-        await callback.answer("Refreshed.")
-        return
-
-    elif level == "mods":
-        title, chat_type = await _chat_title_type(bot, chat_id)
-        chat_obj = await bot.get_chat(chat_id)
-        kb = LayoutBuilder.build_module_selector(chat_obj, page=callback_data.page)
-        await callback.message.edit_text(f"⚙️ <b>{title}</b>\nSelect a module to configure:", parse_mode="HTML", reply_markup=kb)
-
-    elif level == "dev_home":
-        kb = LayoutBuilder.build_dev_module_selector(page=callback_data.page)
-        await callback.message.edit_text("👨‍💻 <b>Developer Settings</b>", parse_mode="HTML", reply_markup=kb)
-
-    elif level == "dash":
-        text, kb = await _render_dashboard(chat_id, callback_data.mod, bot)
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
-
-    elif level == "edit":
-        schema = SettingsRegistry.get_module(callback_data.mod)
-        field = schema["fields"].get(callback_data.field) if schema else None
-        if field:
-            settings = await db.get_settings(chat_id)
-            if field["type"] == "bool":
-                current = settings.get(callback_data.field, field.get("default", False))
-                await db.update_settings(chat_id, {callback_data.field: not current})
-            elif field["type"] == "select":
-                options = field.get("options", [])
-                current = settings.get(callback_data.field, field.get("default", options[0] if options else None))
-                if options:
-                    idx = (options.index(current) + 1) % len(options) if current in options else 0
-                    await db.update_settings(chat_id, {callback_data.field: options[idx]})
-        text, kb = await _render_dashboard(chat_id, callback_data.mod, bot)
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
-
-    elif level == "input":
-        schema = SettingsRegistry.get_module(callback_data.mod)
-        field = schema["fields"].get(callback_data.field) if schema else None
-        if not field:
-            await callback.answer("Field not found.", show_alert=True)
-            return
-        await state.set_state(SettingsInputState.waiting_value)
-        await state.update_data(chat_id=chat_id, mod=callback_data.mod, field=callback_data.field)
-
-        label = field.get("label", callback_data.field)
-        prompt = f"✏️ Send the new value for <b>{label}</b>."
-        desc = field.get("description")
-        if desc:
-            prompt += f"\n<i>{desc}</i>"
-        if field["type"] == "list_input":
-            prompt += "\n\nSend items separated by commas or one per line."
-
-        allow_clear = bool(field.get("allow_clear"))
-        kb = LayoutBuilder.build_cancel_keyboard(chat_id, callback_data.mod, allow_clear=allow_clear)
-        await callback.message.edit_text(prompt, parse_mode="HTML", reply_markup=kb)
-
-    elif level == "clear":
-        data = await state.get_data()
-        field_key = data.get("field")
-        if field_key and data.get("chat_id") == chat_id and data.get("mod") == callback_data.mod:
-            await db.update_settings(chat_id, {field_key: None})
-        await state.clear()
-        text, kb = await _render_dashboard(chat_id, callback_data.mod, bot)
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
-
-    elif level == "admincache":
-        admin_cache.clear_chat_cache(chat_id)
-        await callback.answer("Admin cache cleared.")
-        return
-
-    elif level == "remove_confirm":
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="✅ Yes, Unlink", callback_data=SettingsCallback(level="remove", chat_id=chat_id).pack()),
-            InlineKeyboardButton(text="❌ Cancel", callback_data=SettingsCallback(level="mods", chat_id=chat_id).pack()),
-        ]])
-        await callback.message.edit_text("🗑️ Unlink this chat from your settings list?\n\n(This won't delete any of its stored settings.)", reply_markup=kb)
-
-    elif level == "remove":
-        await db.remove_managed_group(user_id, chat_id)
-        groups = await db.get_managed_groups(user_id)
-        kb = LayoutBuilder.build_group_selector(groups, page=0, user_id=user_id)
-        await callback.message.edit_text("⚙️ <b>Settings</b>\n\nSelect a chat to configure:", parse_mode="HTML", reply_markup=kb)
-
-    else:
+# --- Navigation Handler ---
+@router.callback_query(SettingsCallback.filter(F.level.in_({"home", "dev_home", "mods", "dash", "refresh", "remove_confirm", "remove_exec", "admincache"})))
+async def settings_nav_handler(callback: types.CallbackQuery, callback_data: SettingsCallback, bot: Bot, state: FSMContext):
+    if callback.from_user.id != config.OWNER_ID:
         await callback.answer()
         return
 
-    await callback.answer()
+    # Auto-clear input state if navigating
+    current_state = await state.get_state()
+    if current_state == SettingsState.waiting_for_input:
+        await state.clear()
 
+    action = callback_data.level
+    chat_id = callback_data.chat_id
+    page = callback_data.page
+    module_key = callback_data.mod
 
-@router.callback_query(F.data == "ignore")
-async def ignore_callback(callback: CallbackQuery):
-    await callback.answer()
+    if action == "home":
+        groups = await db.get_managed_groups(callback.from_user.id)
+        markup = LayoutBuilder.build_group_selector(groups, page, user_id=callback.from_user.id)
 
+        try:
+             await callback.message.edit_text(
+                "⚙️ <b>Global Settings Manager</b>\nSelect a chat to configure:",
+                reply_markup=markup,
+                parse_mode="HTML"
+            )
+        except TelegramBadRequest:
+            pass
+        finally:
+            try:
+                await callback.answer()
+            except Exception:
+                pass
 
-@router.callback_query(F.data == "settings_add_chat")
-async def add_chat_callback(callback: CallbackQuery):
-    await callback.answer(
-        "Add me as admin to your channel or group, then run /settings inside it to link it here.",
-        show_alert=True,
-    )
+    elif action == "dev_home":
+        if callback.from_user.id != config.OWNER_ID:
+            await callback.answer("Access denied.", show_alert=True)
+            return
 
+        markup = LayoutBuilder.build_dev_module_selector(page)
+        try:
+            await callback.message.edit_text(
+                "👨‍💻 <b>Developer Tools</b>\nSelect a module:",
+                reply_markup=markup,
+                parse_mode="HTML"
+            )
+        except TelegramBadRequest:
+            pass
+        finally:
+            try:
+                await callback.answer()
+            except Exception:
+                pass
 
-# --- Text/list input receiver -------------------------------------------------
+    elif action == "mods":
+        if not await db.is_group_managed_by_user(callback.from_user.id, chat_id):
+            await callback.answer("Access denied.", show_alert=True)
+            return
 
-@router.message(StateFilter(SettingsInputState.waiting_value))
-async def settings_input_received(message: Message, state: FSMContext, bot: Bot):
+        try:
+            chat = settings_cache.get_chat(chat_id)
+            if chat is None:
+                chat = await bot.get_chat(chat_id)
+                settings_cache.set_chat(chat_id, chat)
+            markup = LayoutBuilder.build_module_selector(chat, page)
+
+            icon = "📢" if chat.type == "channel" else "💬"
+            chat_link = f"@{chat.username}" if chat.username else "Private Chat"
+            if not chat.username and chat.invite_link:
+                 chat_link = chat.invite_link
+
+            header_text = (
+                f"{icon} <b>{html.escape(chat.title)}</b>\n"
+                f"{chat_link}\n"
+                f"ID: <code>{chat.id}</code>\n\n"
+                f"Select a module:"
+            )
+
+            try:
+                await callback.message.edit_text(header_text, reply_markup=markup, parse_mode="HTML")
+            except TelegramBadRequest:
+                pass
+            finally:
+                try:
+                    await callback.answer()
+                except Exception:
+                    pass
+        except TelegramNetworkError:
+            # Network timeout — callback is likely already expired, silently drop
+            try:
+                await callback.answer("⏳ Request timed out. Please try again.", show_alert=True)
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                await callback.answer(f"Chat not found: {str(e)}", show_alert=True)
+            except Exception:
+                pass
+
+    elif action == "dash":
+        if chat_id == 0:
+            if callback.from_user.id != config.OWNER_ID:
+                await callback.answer("Access denied.", show_alert=True)
+                return
+        elif not await db.is_group_managed_by_user(callback.from_user.id, chat_id):
+            await callback.answer("Access denied.", show_alert=True)
+            return
+
+        schema = SettingsRegistry.get_module(module_key)
+        if not schema:
+            await callback.answer("Module not found.", show_alert=True)
+            return
+
+        collection = schema.get("db_collection", "settings")
+        settings_data = await get_collection_data(chat_id, collection)
+
+        if chat_id == 0:
+            chat_title = "Global / Developer"
+            chat_type = "private"
+        else:
+            try:
+                chat = settings_cache.get_chat(chat_id)
+                if chat is None:
+                    chat = await bot.get_chat(chat_id)
+                    settings_cache.set_chat(chat_id, chat)
+                chat_title = chat.title
+                chat_type = chat.type
+            except TelegramNetworkError:
+                try:
+                    await callback.answer("⏳ Request timed out. Please try again.", show_alert=True)
+                except Exception:
+                    pass
+                return
+            except Exception as e:
+                try:
+                    await callback.answer(f"Chat not found: {str(e)}", show_alert=True)
+                except Exception:
+                    pass
+                return
+
+        text, markup = LayoutBuilder.build_dashboard(chat_id, module_key, settings_data, chat_title, chat_type)
+        try:
+            await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+        except TelegramBadRequest:
+            pass
+        finally:
+            try:
+                await callback.answer()
+            except Exception:
+                pass
+
+    elif action == "refresh":
+         groups = await db.get_managed_groups(callback.from_user.id)
+         # Invalidate chat cache for all managed groups so fresh names are fetched
+         for group in groups:
+             settings_cache.invalidate_chat(group['chat_id'])
+
+         markup = LayoutBuilder.build_group_selector(groups, page, user_id=callback.from_user.id)
+         try:
+            await callback.message.edit_text("⚙️ <b>Global Settings Manager</b>\nSelect a chat to configure:", reply_markup=markup, parse_mode="HTML")
+         except TelegramBadRequest:
+             pass
+         finally:
+            try:
+                await callback.answer()
+            except Exception:
+                pass
+
+    elif action == "remove_confirm":
+        chat_obj = settings_cache.get_chat(chat_id)
+        if chat_obj is None:
+            try:
+                chat_obj = await bot.get_chat(chat_id)
+            except Exception:
+                pass
+        title = html.escape(chat_obj.title) if chat_obj else str(chat_id)
+        icon = "📢" if (chat_obj and chat_obj.type == "channel") else "👥"
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(
+                text="✅ Yes, Unlink",
+                callback_data=SettingsCallback(level="remove_exec", chat_id=chat_id).pack()
+            )],
+            [types.InlineKeyboardButton(
+                text="❌ Cancel",
+                callback_data=SettingsCallback(level="mods", chat_id=chat_id).pack()
+            )]
+        ])
+        await callback.message.edit_text(
+            f"⚠️ <b>Unlink Chat?</b>\n\n"
+            f"{icon} <b>{title}</b> will be removed from your Settings dashboard.\n\n"
+            f"All module settings for this chat will remain intact in the database.\n"
+            f"You can re-add it anytime using ➕ Add New Chat.",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        try:
+            await callback.answer()
+        except Exception:
+            pass
+
+    elif action == "remove_exec":
+        chat_obj = settings_cache.get_chat(chat_id)
+        if chat_obj is None:
+            try:
+                chat_obj = await bot.get_chat(chat_id)
+            except Exception:
+                pass
+        title = html.escape(chat_obj.title) if chat_obj else str(chat_id)
+        icon = "📢" if (chat_obj and chat_obj.type == "channel") else "👥"
+
+        if await db.remove_managed_group(callback.from_user.id, chat_id):
+            settings_cache.invalidate_chat(chat_id)
+            log.info(f"Chat {chat_id} unlinked from Settings by user {callback.from_user.id}")
+            await callback.message.edit_text(
+                f"✅ <b>Chat Unlinked</b>\n\n"
+                f"{icon} <b>{title}</b> has been removed from your Settings dashboard.\n\n"
+                f"You can re-add it anytime using ➕ Add New Chat.",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(
+                        text="◁ Back to Dashboard",
+                        callback_data=SettingsCallback(level="home").pack()
+                    )
+                ]]),
+                parse_mode="HTML"
+            )
+        else:
+            await callback.answer("Failed to unlink.", show_alert=True)
+        try:
+            await callback.answer()
+        except Exception:
+            pass
+
+    elif action == "admincache":
+        from ...utils.admin_cache import clear_chat_cache
+        clear_chat_cache(chat_id)
+        await callback.answer("Admin cache cleared.", show_alert=True)
+
+# --- Logic Handler (Edit) ---
+@router.callback_query(SettingsCallback.filter(F.level == "edit"))
+async def settings_edit_handler(callback: types.CallbackQuery, callback_data: SettingsCallback, bot: Bot):
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer()
+        return
+
+    chat_id = callback_data.chat_id
+    module_key = callback_data.mod
+    field_key = callback_data.field
+
+    if chat_id == 0:
+        if callback.from_user.id != config.OWNER_ID:
+            await callback.answer("Access denied.", show_alert=True)
+            return
+    elif not await db.is_group_managed_by_user(callback.from_user.id, chat_id):
+        await callback.answer("Access denied.", show_alert=True)
+        return
+
+    schema = SettingsRegistry.get_module(module_key)
+    field_config = schema["fields"].get(field_key)
+    if not field_config:
+        return
+
+    collection = schema.get("db_collection", "settings")
+    settings_data = await get_collection_data(chat_id, collection)
+
+    if field_config["type"] == "bool":
+            current_val = settings_data.get(field_key, False)
+            await update_collection_data(chat_id, collection, {field_key: not current_val})
+
+    elif field_config["type"] == "select":
+            current_val = settings_data.get(field_key)
+            options = field_config.get("options", [])
+
+            try:
+                idx = options.index(current_val)
+                new_idx = (idx + 1) % len(options)
+                new_val = options[new_idx]
+            except ValueError:
+                if options:
+                    new_val = options[0]
+                else:
+                    new_val = None
+
+            if new_val is not None:
+                await update_collection_data(chat_id, collection, {field_key: new_val})
+
+    # Refresh dashboard
+    settings_data = await get_collection_data(chat_id, collection)
+
+    if chat_id == 0:
+        chat_title = "Global / Developer"
+        chat_type = "private"
+    else:
+        chat = await bot.get_chat(chat_id)
+        chat_title = chat.title
+        chat_type = chat.type
+
+    text, markup = LayoutBuilder.build_dashboard(chat_id, module_key, settings_data, chat_title, chat_type)
+    try:
+        await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    except TelegramBadRequest:
+        pass
+    finally:
+        try:
+            await callback.answer()
+        except Exception:
+            pass
+
+# --- Input Request Handler ---
+@router.callback_query(SettingsCallback.filter(F.level == "input"))
+async def settings_input_prompt_handler(callback: types.CallbackQuery, callback_data: SettingsCallback, state: FSMContext):
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer()
+        return
+
+    chat_id = callback_data.chat_id
+    module_key = callback_data.mod
+    field_key = callback_data.field
+
+    if chat_id == 0:
+        if callback.from_user.id != config.OWNER_ID:
+            await callback.answer("Access denied.", show_alert=True)
+            return
+    elif not await db.is_group_managed_by_user(callback.from_user.id, chat_id):
+        await callback.answer("Access denied.", show_alert=True)
+        return
+
+    schema = SettingsRegistry.get_module(module_key)
+    field_config = schema["fields"].get(field_key)
+
+    collection = schema.get("db_collection", "settings")
+    settings_data = await get_collection_data(chat_id, collection)
+
+    val = settings_data.get(field_key)
+    current_val_str = str(val) if val is not None else "Not Set"
+
+    await state.update_data(chat_id=chat_id, module_key=module_key, field_key=field_key)
+    await state.set_state(SettingsState.waiting_for_input)
+
+    prompt = f"Please enter the new value for <b>{field_config['label']}</b>.\n\nCurrent value: <code>{html.escape(current_val_str)}</code>\n\n"
+    if field_config.get('description'):
+        prompt += f"<i>{field_config['description']}</i>\n"
+
+    if field_config['type'] == 'select':
+            prompt += f"Options: {', '.join(field_config['options'])}"
+
+    prompt += "\n\n<i>👇 Click below to cancel or type the value.</i>"
+
+    # Check if this field should have a "Remove/Reset" button.
+    # Fields declare this in their schema via allow_clear=True (preferred),
+    # or fall back to the legacy hardcoded set for older modules.
+    allow_clear = False
+    clear_label = "🗑️ Remove / Clear"
+    if field_config.get("allow_clear"):
+        allow_clear = True
+        clear_label = field_config.get("clear_label", "🗑️ Remove / Clear")
+    elif field_config["type"] == "input":
+        legacy_removable = {"log_channel", "log_channel_id", "approval_group_id", "pdf_footer_text"}
+        if field_key in legacy_removable:
+            allow_clear = True
+
+    # Use the new inline cancel keyboard with optional clear capability
+    markup = LayoutBuilder.build_cancel_keyboard(chat_id, module_key, allow_clear=allow_clear, clear_label=clear_label)
+
+    try:
+        await callback.message.edit_text(prompt, reply_markup=markup, parse_mode="HTML")
+    except TelegramBadRequest:
+        pass
+    finally:
+        try:
+            await callback.answer()
+        except Exception:
+            pass
+
+# --- Clear/Remove Handler ---
+@router.callback_query(SettingsCallback.filter(F.level == "clear"))
+async def settings_clear_handler(callback: types.CallbackQuery, callback_data: SettingsCallback, state: FSMContext, bot: Bot):
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer()
+        return
+
+    # Only called from input prompt state
+    data = await state.get_data()
+    chat_id = data.get('chat_id')
+    module_key = data.get('module_key')
+    field_key = data.get('field_key')
+
+    if not chat_id or not module_key or not field_key:
+        await callback.answer("Session expired.", show_alert=True)
+        await state.clear()
+        return
+
+    schema = SettingsRegistry.get_module(module_key)
+    collection = schema.get("db_collection", "settings")
+    field_config = schema["fields"].get(field_key, {})
+
+    # If the field declares an on_clear payload, apply that (supports multi-field atomic reset).
+    # Otherwise fall back to simply nulling the field.
+    on_clear = field_config.get("on_clear")
+    if on_clear:
+        await update_collection_data(chat_id, collection, on_clear)
+    else:
+        await update_collection_data(chat_id, collection, {field_key: None})
+
+    await state.clear()
+    clear_label_done = field_config.get("clear_label", "🗑️ Remove / Clear")
+    await callback.answer(f"{clear_label_done} done.", show_alert=True)
+
+    # Return to dashboard
+    settings_data = await get_collection_data(chat_id, collection)
+    if chat_id == 0:
+        chat_title = "Global / Developer"
+        chat_type = "private"
+    else:
+        chat = await bot.get_chat(chat_id)
+        chat_title = chat.title
+        chat_type = chat.type
+
+    text, markup = LayoutBuilder.build_dashboard(chat_id, module_key, settings_data, chat_title, chat_type)
+
+    try:
+        await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    except TelegramBadRequest:
+        pass
+    except Exception:
+        await callback.message.answer(text, reply_markup=markup, parse_mode="HTML")
+
+# --- Cancel Input ---
+@router.message(SettingsState.waiting_for_input, Command("cancel"))
+async def cancel_input_handler(message: types.Message, state: FSMContext):
+    if message.from_user.id != config.OWNER_ID:
+        return
     data = await state.get_data()
     chat_id = data.get("chat_id")
-    mod = data.get("mod")
-    field_key = data.get("field")
-    if not (chat_id and mod and field_key):
-        await state.clear()
-        return
+    module_key = data.get("module_key")
 
-    schema = SettingsRegistry.get_module(mod)
-    field = schema["fields"].get(field_key) if schema else None
-    if not field:
-        await state.clear()
-        return
-
-    # Accept an uploaded document/photo file_id for fields that expect one
-    # (e.g. watermark logo), otherwise fall back to the message text.
-    if message.document:
-        raw = message.document.file_id
-    elif message.photo:
-        raw = message.photo[-1].file_id
-    else:
-        raw = (message.text or "").strip()
-
-    if field["type"] == "list_input":
-        value = [x.strip() for x in re.split(r"[,\n]", raw) if x.strip()]
-    else:
-        validator = field.get("validator")
-        if validator:
-            ok, err = validator(raw)
-            if not ok:
-                await message.reply(f"❌ {err}")
-                return
-        # Store plain numeric input (e.g. a log channel ID) as an int.
-        value = int(raw) if re.fullmatch(r"-?\d+", raw) else raw
-
-    await db.update_settings(chat_id, {field_key: value})
     await state.clear()
 
-    text, kb = await _render_dashboard(chat_id, mod, bot)
-    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+    if chat_id and module_key:
+        await message.reply("❌ Input cancelled. Please use the menu to navigate.", parse_mode="HTML")
+    else:
+        await message.reply("❌ Input cancelled.", parse_mode="HTML")
+
+# --- Process Input ---
+@router.message(SettingsState.waiting_for_input)
+async def process_settings_input(message: types.Message, state: FSMContext, bot: Bot):
+    if message.from_user.id != config.OWNER_ID:
+        return
+    data = await state.get_data()
+    chat_id = data.get('chat_id')
+    module_key = data.get('module_key')
+    field_key = data.get('field_key')
+
+    if not chat_id or not module_key or not field_key:
+        await message.reply("❌ Session expired. Please try again.", parse_mode="HTML")
+        await state.clear()
+        return
+
+    schema = SettingsRegistry.get_module(module_key)
+    field_config = schema["fields"][field_key]
+    collection = schema.get("db_collection", "settings")
+
+    if field_key == "logo_id":
+        if message.document and getattr(message.document, 'mime_type', '') == 'image/png':
+            input_value = message.document.file_id
+        elif message.text:
+            input_value = message.text
+        else:
+            await message.reply("❌ Invalid format. Please send an uncompressed PNG document or a File ID.")
+            return
+    else:
+        input_value = message.text
+
+    if not input_value and field_key != "logo_id":
+        await message.reply("❌ Invalid input. Please send text.")
+        return
+
+    if field_config.get("validator"):
+        is_valid, error_msg = field_config["validator"](input_value)
+        if not is_valid:
+            await message.reply(f"❌ Invalid input: {error_msg}\nPlease try again.", parse_mode="HTML")
+            return
+
+    final_value = input_value
+
+    if field_config["type"] == "select":
+        if input_value not in field_config["options"]:
+            await message.reply(f"❌ Invalid option. Choose from: {', '.join(field_config['options'])}", parse_mode="HTML")
+            return
+
+    elif field_config["type"] == "list_input":
+        # Robust split by comma or newline
+        items = re.split(r'[,\n]', input_value)
+        final_list = []
+        for item in items:
+            item = item.strip()
+            if not item: continue
+            if item.isdigit():
+                final_list.append(int(item))
+            else:
+                final_list.append(item)
+        final_value = final_list
+
+    update_data = {}
+
+    if field_config["type"] == "composite_time":
+        parts = input_value.split()
+        if len(parts) != 2:
+             await message.reply("❌ Format Error: Please provide TWO times separated by space.\nExample: <code>09:00 21:00</code>", parse_mode="HTML")
+             return
+        start, end = parts
+        update_data["start"] = start
+        update_data["end"] = end
+    elif field_config["type"] == "duration":
+        # Check basic format
+        if not re.match(r'^(\d+h)?\s*(\d+m)?$', input_value.lower().replace(" ", "")) and not re.match(r'^\d+$', input_value):
+             await message.reply("❌ Invalid format. Use <code>2h</code>, <code>30m</code>, or <code>1h 30m</code>.", parse_mode="HTML")
+             return
+
+        duration_regex = re.compile(r'((?P<hours>\d+?)\s*h)?\s*((?P<minutes>\d+?)\s*m)?')
+        parts = duration_regex.match(input_value.lower())
+
+        time_params = {}
+        if parts:
+             time_params = {name: int(value) for name, value in parts.groupdict().items() if value}
+
+        if not time_params:
+             await message.reply("❌ Time cannot be 0.", parse_mode="HTML")
+             return
+
+        delta = timedelta(**time_params)
+
+        now_utc = datetime.now(timezone.utc)
+        paused_until = now_utc + delta
+        update_data["paused_until"] = paused_until.isoformat()
+    else:
+        update_data[field_key] = final_value
+
+    if update_data:
+        await update_collection_data(chat_id, collection, update_data)
+
+    await state.clear()
+
+    settings_data = await get_collection_data(chat_id, collection)
+
+    if chat_id == 0:
+        chat_title = "Global / Developer"
+        chat_type = "private"
+    else:
+        chat = await bot.get_chat(chat_id)
+        chat_title = chat.title
+        chat_type = chat.type
+
+    text, markup = LayoutBuilder.build_dashboard(chat_id, module_key, settings_data, chat_title, chat_type)
+    await message.reply(text, reply_markup=markup, parse_mode="HTML")
+
+# =============================================================================
+# Add New Chat — owner picks any chat the bot is already in via button
+# =============================================================================
+
+@router.callback_query(F.data == "settings_add_chat")
+async def settings_add_chat_cb(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
+    """Show all bot_chats not yet linked, so the owner can pick one to add."""
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer()
+        return
+
+    all_chats = await db.get_all_bot_chats()
+    managed = await db.get_managed_groups(callback.from_user.id)
+    managed_ids = {g["chat_id"] for g in managed}
+
+    available = [c for c in all_chats if c["chat_id"] not in managed_ids]
+
+    if not available:
+        await callback.answer("All chats the bot is in are already linked.", show_alert=True)
+        return
+
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from aiogram.types import InlineKeyboardButton
+
+    builder = InlineKeyboardBuilder()
+    for chat in available[:20]:  # cap at 20 to keep keyboard manageable
+        icon = "📢" if chat.get("type") == "channel" else "👥"
+        label = f"{icon} {chat['title']}"
+        builder.row(InlineKeyboardButton(
+            text=label,
+            callback_data=f"settings_link_chat_{chat['chat_id']}"
+        ))
+    builder.row(InlineKeyboardButton(text="✏️ Enter Chat ID manually", callback_data="settings_add_chat_manual"))
+    builder.row(InlineKeyboardButton(text="◁ Back", callback_data=SettingsCallback(level="home").pack()))
+    builder.adjust(1)
+
+    await callback.message.edit_text(
+        "➕ <b>Add New Chat</b>\n\nSelect a chat the bot is already in, or enter an ID manually:",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("settings_link_chat_"))
+async def settings_link_chat_cb(callback: types.CallbackQuery, bot: Bot):
+    """Link an existing bot_chat to managed_groups."""
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer()
+        return
+
+    chat_id = int(callback.data.split("_")[3])
+    try:
+        chat = await bot.get_chat(chat_id)
+        await db.add_managed_group(callback.from_user.id, chat_id, chat.title, chat.type)
+        chat_type_label = "Channel" if chat.type == "channel" else "Group"
+        await callback.answer(f"✅ {chat_type_label} '{chat.title}' linked!", show_alert=True)
+    except Exception as e:
+        await callback.answer(f"❌ Error: {e}", show_alert=True)
+        return
+
+    # Return to home
+    groups = await db.get_managed_groups(callback.from_user.id)
+    markup = LayoutBuilder.build_group_selector(groups, user_id=callback.from_user.id)
+
+    try:
+        await callback.message.edit_text(
+            "⚙️ <b>Global Settings Manager</b>\nSelect a chat to configure:",
+            reply_markup=markup,
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "settings_add_chat_manual")
+async def settings_add_chat_manual_cb(callback: types.CallbackQuery, state: FSMContext):
+    """Prompt the owner to type a chat ID."""
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer()
+        return
+    await state.set_state(SettingsState.waiting_for_add_chat_id)
+    await callback.message.edit_text(
+        "✏️ <b>Enter Chat ID</b>\n\nSend the numeric Chat ID (e.g. <code>-1001234567890</code>).",
+        parse_mode="HTML",
+        reply_markup=get_cancel_kb("settings_cancel_add_chat")
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "settings_cancel_add_chat")
+async def settings_cancel_add_chat_cb(callback: types.CallbackQuery, state: FSMContext):
+    """Cancel the add chat manual input."""
+    if callback.from_user.id != config.OWNER_ID:
+        await callback.answer()
+        return
+    await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        await callback.message.edit_text("❌ Operation cancelled. Use /settings to continue.")
+    finally:
+        await callback.answer()
+
+
+@router.message(SettingsState.waiting_for_add_chat_id, Command("cancel"))
+async def settings_add_chat_cancel(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.reply("Cancelled. Use /settings to continue.")
+
+
+@router.message(SettingsState.waiting_for_add_chat_id)
+async def settings_add_chat_manual_input(message: types.Message, state: FSMContext, bot: Bot):
+    """Process a manually entered chat ID."""
+    if message.from_user.id != config.OWNER_ID:
+        return
+    raw = message.text.strip()
+    try:
+        chat_id = int(raw)
+    except ValueError:
+        await message.reply("❌ That doesn't look like a valid Chat ID. Send a number like <code>-1001234567890</code>.", parse_mode="HTML")
+        return
+
+    try:
+        chat = await bot.get_chat(chat_id)
+    except Exception as e:
+        await message.reply(f"❌ Could not access that chat. Make sure the bot is a member.\n<code>{html.escape(str(e))}</code>", parse_mode="HTML")
+        return
+
+    await db.add_managed_group(message.from_user.id, chat_id, chat.title, chat.type)
+    await state.clear()
+    chat_type_label = "Channel" if chat.type == "channel" else "Group"
+    await message.reply(
+        f"✅ {chat_type_label} <b>{html.escape(chat.title)}</b> linked successfully!\n\nUse /settings to manage it.",
+        parse_mode="HTML"
+    )
