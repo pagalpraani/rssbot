@@ -134,7 +134,12 @@ def get_formatting_keyboard():
 @owner_only
 async def help_command(message: types.Message, bot: Bot):
     help_text = "<b>❓ Help Center</b>\n\nSelect a module to see its commands."
-    kb = get_main_help_keyboard()
+    try:
+        kb = get_main_help_keyboard()
+    except Exception:
+        log.exception("Failed to build the help menu keyboard")
+        await message.reply("⚠️ Couldn't build the help menu. Check the bot logs for details.")
+        return
 
     if message.chat.type == "private":
         # Already in PM — just answer directly, no need to route through bot.send_message.
@@ -154,8 +159,10 @@ async def help_main_callback(query: types.CallbackQuery):
     help_text = "<b>❓ Help Center</b>\n\nSelect a module to see its commands."
     try:
         await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_main_help_keyboard())
-    finally:
         await query.answer()
+    except Exception:
+        log.exception("help_main_callback failed")
+        await query.answer("⚠️ Something went wrong. Check the bot logs.", show_alert=True)
 
 @router.callback_query(F.data.startswith("help_view:"))
 @owner_only
@@ -170,6 +177,7 @@ async def help_view_callback(query: types.CallbackQuery):
             if icon:
                 help_text = help_text.replace("<b>", f"<b>{icon} ", 1)
             await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_formatting_keyboard())
+            await query.answer()
             return
 
         help_text = HelpRegistry.get_help_text(key)
@@ -183,8 +191,10 @@ async def help_view_callback(query: types.CallbackQuery):
         builder.button(text="◁ Back", callback_data="help_main")
 
         await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=builder.as_markup())
-    finally:
         await query.answer()
+    except Exception:
+        log.exception(f"help_view_callback failed for key={key!r}")
+        await query.answer("⚠️ Something went wrong. Check the bot logs.", show_alert=True)
 
 # --- Formatting Sub-Menu Callbacks ---
 
@@ -206,5 +216,7 @@ async def help_fmt_callback(query: types.CallbackQuery):
 
     try:
         await query.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    finally:
         await query.answer()
+    except Exception:
+        log.exception("help_fmt_callback failed")
+        await query.answer("⚠️ Something went wrong. Check the bot logs.", show_alert=True)
