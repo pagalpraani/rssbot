@@ -111,45 +111,47 @@ HelpRegistry.register(
 )
 
 
-def get_main_selection_keyboard():
+def get_main_help_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.button(text="💬 Group", callback_data="help_menu:group")
-    builder.button(text="📢 Channel", callback_data="help_menu:channel")
-    builder.adjust(2)
-    # Developer on its own row (secondary)
-    builder.row(types.InlineKeyboardButton(text="👨‍💻 Developer", callback_data="help_menu:dev"))
-    return builder.as_markup()
-
-def get_module_list_keyboard(chat_type: str):
-    builder = InlineKeyboardBuilder()
-    modules = HelpRegistry.get_all(chat_type=chat_type)
+    modules = HelpRegistry.get_all(exclude_type="dev")
 
     for name, key in modules:
-        builder.button(text=name, callback_data=f"help_view:{chat_type}:{key}")
+        builder.button(text=name, callback_data=f"help_view:{key}")
+    builder.adjust(2)
+
+    builder.row(types.InlineKeyboardButton(text="👨‍💻 Developer", callback_data="help_dev"))
+    return builder.as_markup()
+
+def get_dev_keyboard():
+    builder = InlineKeyboardBuilder()
+    modules = HelpRegistry.get_all(chat_type="dev")
+
+    for name, key in modules:
+        builder.button(text=name, callback_data=f"help_view:{key}")
     builder.adjust(2)
 
     builder.row(types.InlineKeyboardButton(text="◁ Back", callback_data="help_main"))
     return builder.as_markup()
 
-def get_formatting_keyboard(chat_type_context: str = "group"):
+def get_formatting_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.button(text="Markdown", callback_data=f"help_fmt_markdown:{chat_type_context}")
-    builder.button(text="Fillings", callback_data=f"help_fmt_fillings:{chat_type_context}")
-    builder.button(text="Random Content", callback_data=f"help_fmt_random:{chat_type_context}")
+    builder.button(text="Markdown", callback_data="help_fmt_markdown")
+    builder.button(text="Fillings", callback_data="help_fmt_fillings")
+    builder.button(text="Random Content", callback_data="help_fmt_random")
     builder.adjust(2)
-    builder.row(types.InlineKeyboardButton(text="◁ Back", callback_data=f"help_menu:{chat_type_context}"))
+    builder.row(types.InlineKeyboardButton(text="◁ Back", callback_data="help_view:formatting"))
     return builder.as_markup()
 
 @router.message(Command("help", prefix="!/"), F.chat.type.in_({"private", "group", "supergroup"}))
 @owner_only
 async def help_command(message: types.Message, bot: Bot):
-    help_text = "<b>❓ Help Center</b>\n\nSelect a category to see the available commands."
+    help_text = "<b>❓ Help Center</b>\n\nSelect a module to see its commands."
     try:
         await bot.send_message(
             message.from_user.id,
             help_text,
             parse_mode="HTML",
-            reply_markup=get_main_selection_keyboard()
+            reply_markup=get_main_help_keyboard()
         )
         if message.chat.type != "private":
             await message.reply("Help menu sent to your PM.", parse_mode="HTML")
@@ -159,45 +161,35 @@ async def help_command(message: types.Message, bot: Bot):
 @router.callback_query(F.data == "help_main")
 @owner_only
 async def help_main_callback(query: types.CallbackQuery):
-    help_text = "<b>❓ Help Center</b>\n\nSelect a category to see the available commands."
+    help_text = "<b>❓ Help Center</b>\n\nSelect a module to see its commands."
     try:
-        await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_main_selection_keyboard())
+        await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_main_help_keyboard())
     finally:
         await query.answer()
 
-@router.callback_query(F.data.startswith("help_menu:"))
+@router.callback_query(F.data == "help_dev")
 @owner_only
-async def help_menu_callback(query: types.CallbackQuery):
-    chat_type_filter = query.data.split(":")[1]
-
-    if chat_type_filter == "group":
-        title = "Group"
-    elif chat_type_filter == "channel":
-        title = "Channel"
-    else:
-        title = "Developer"
-
-    text = f"<b>{title} Modules</b>\nSelect a module:"
-
+async def help_dev_callback(query: types.CallbackQuery):
+    text = "<b>👨‍💻 Developer Modules</b>\nSelect a module:"
     try:
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_module_list_keyboard(chat_type_filter))
+        await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_dev_keyboard())
     finally:
         await query.answer()
 
 @router.callback_query(F.data.startswith("help_view:"))
 @owner_only
 async def help_view_callback(query: types.CallbackQuery):
-    # help_view:chat_type:key
-    _, chat_type_filter, key = query.data.split(":")
+    # help_view:key
+    key = query.data.split(":", 1)[1]
+    is_dev = key.startswith("dev_")
 
-    # Special handling for Formatting to show submenu
     try:
         if key == "formatting":
             help_text = HelpRegistry.get_help_text(key)
             icon = HELP_MODULE_ICONS.get(key, "")
             if icon:
                 help_text = help_text.replace("<b>", f"<b>{icon} ", 1)
-            await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_formatting_keyboard(chat_type_filter))
+            await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_formatting_keyboard())
             return
 
         help_text = HelpRegistry.get_help_text(key)
@@ -208,7 +200,7 @@ async def help_view_callback(query: types.CallbackQuery):
             help_text = help_text.replace("<b>", f"<b>{icon} ", 1)
 
         builder = InlineKeyboardBuilder()
-        builder.button(text="◁ Back", callback_data=f"help_menu:{chat_type_filter}")
+        builder.button(text="◁ Back", callback_data="help_dev" if is_dev else "help_main")
 
         await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=builder.as_markup())
     finally:
@@ -219,10 +211,7 @@ async def help_view_callback(query: types.CallbackQuery):
 @router.callback_query(F.data.startswith("help_fmt_"))
 @owner_only
 async def help_fmt_callback(query: types.CallbackQuery):
-    # help_fmt_markdown:chat_type
-    data_parts = query.data.split(":")
-    action = data_parts[0]
-    chat_type_filter = data_parts[1] if len(data_parts) > 1 else "group"
+    action = query.data
 
     text = ""
     if action == "help_fmt_markdown":
@@ -233,7 +222,7 @@ async def help_fmt_callback(query: types.CallbackQuery):
         text = HELP_TEXT_RANDOM
 
     builder = InlineKeyboardBuilder()
-    builder.button(text="◁ Back", callback_data=f"help_view:{chat_type_filter}:formatting")
+    builder.button(text="◁ Back", callback_data="help_view:formatting")
 
     try:
         await query.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
