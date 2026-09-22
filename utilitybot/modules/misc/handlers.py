@@ -251,11 +251,6 @@ async def info_command(message: Message, bot: Bot):
             if is_anon:
                 user_text += f"\n<b>Anonymous:</b> Yes"
 
-            # Show Bot Role
-            role = await db.get_user_role(message.chat.id, target_user.id)
-            if role:
-                user_text += f"\n<b>Bot Role:</b> {role}"
-
         except Exception:
             pass
 
