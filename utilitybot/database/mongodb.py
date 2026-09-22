@@ -387,14 +387,31 @@ class MongoDB:
         # rss_processed: non-unique compound index — fast lookup, safe on existing data
         # unique=True is intentionally omitted: upsert in mark_rss_item_processed
         # prevents new duplicates without risking a startup crash on old data.
+        # NOTE: no TTL index here anymore. Records used to expire after 90 days,
+        # which meant a feed keeping the same items in its XML past that point
+        # would have them re-sent as "new". Retention is now persistent and
+        # bounded per-feed by enforce_processed_cap() (see RSS_PROCESSED_CACHE_CAP).
+        try:
+            # Drop the old single-field TTL index from previous deployments, if present —
+            # otherwise it keeps silently expiring items every 90 days regardless of the
+            # change below, since Mongo doesn't remove an index just because the code
+            # stopped re-creating it.
+            existing = await self.db.rss_processed.index_information()
+            for idx_name, idx_info in existing.items():
+                if idx_info.get("key") == [("processed_at", 1)] and "expireAfterSeconds" in idx_info:
+                    await self.db.rss_processed.drop_index(idx_name)
+                    log.info(f"Dropped legacy 90-day TTL index '{idx_name}' on rss_processed.")
+        except Exception as e:
+            log.warning(f"rss_processed legacy TTL index cleanup error (non-fatal): {e}")
+
         try:
             await self.db.rss_processed.create_index(
                 [("chat_id", 1), ("feed_url", 1), ("item_id", 1)],
                 background=True
             )
-            # TTL: auto-expire processed records after 90 days
             await self.db.rss_processed.create_index(
-                "processed_at", expireAfterSeconds=90 * 86400, background=True
+                [("chat_id", 1), ("feed_url", 1), ("processed_at", 1)],
+                background=True
             )
         except Exception as e:
             log.warning(f"rss_processed index error (non-fatal): {e}")
@@ -1050,6 +1067,27 @@ class MongoDB:
         )
         docs = await cursor.to_list(length=None)
         return {d["item_id"] for d in docs}
+
+    async def enforce_processed_cap(self, chat_id: int, feed_url: str, max_count: int):
+        """
+        Keeps only the newest `max_count` processed-item records for a feed,
+        deleting the oldest overflow. Since retention is now persistent (no
+        TTL), this is what keeps rss_processed from growing unbounded for a
+        long-running feed.
+        """
+        if max_count <= 0:
+            return
+        count = await self.db.rss_processed.count_documents({"chat_id": chat_id, "feed_url": feed_url})
+        overflow = count - max_count
+        if overflow <= 0:
+            return
+        cursor = self.db.rss_processed.find(
+            {"chat_id": chat_id, "feed_url": feed_url},
+            {"_id": 1}
+        ).sort("processed_at", 1).limit(overflow)
+        ids = [doc["_id"] async for doc in cursor]
+        if ids:
+            await self.db.rss_processed.delete_many({"_id": {"$in": ids}})
 
 
 
