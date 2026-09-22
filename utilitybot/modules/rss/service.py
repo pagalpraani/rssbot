@@ -432,7 +432,7 @@ async def _process_single_feed(bot_instance, feed: dict, force_single: bool = Fa
         # so they appear in correct chronological order in the chat.
         entries_to_process = parsed.entries if force_single else reversed(parsed.entries)
 
-        for entry in entries_to_process:
+        def _compute_item_id(entry):
             # Priority: guid (most reliable) → id → link → hash fallback.
             # feedparser maps <guid> to entry.id and also exposes it as entry.guid.
             item_id = (
@@ -451,13 +451,37 @@ async def _process_single_feed(bot_instance, feed: dict, force_single: bool = Fa
                     (entry.get('summary') or '')[:200]
                 )
                 item_id = 'hash:' + hashlib.md5(_hash_src.encode('utf-8', errors='replace')).hexdigest()
+            return item_id
 
+        id_entry_pairs = [(_compute_item_id(e), e) for e in entries_to_process]
+
+        if force_single:
+            final_pairs = id_entry_pairs
+        else:
+            # id_entry_pairs is oldest -> newest (see reversed() above).
+            unprocessed_pairs = [(iid, e) for iid, e in id_entry_pairs if iid not in processed_ids]
+            max_new = config.RSS_MAX_NEW_ITEMS_PER_CYCLE
+            if max_new > 0 and len(unprocessed_pairs) > max_new:
+                # Backlog too large (new feed, or a big gap since the last check).
+                # Send only the newest `max_new` items; silently mark the older
+                # overflow as processed so it's never sent later either — this
+                # is what stops a 700-800 item feed from flooding the chat.
+                overflow_pairs = unprocessed_pairs[:-max_new]
+                final_pairs = unprocessed_pairs[-max_new:]
+                for iid, _ in overflow_pairs:
+                    newly_processed.add(iid)
+                log.info(
+                    f"Feed backlog capped for {feed_url}: {len(overflow_pairs)} older "
+                    f"item(s) marked as seen without sending "
+                    f"({len(unprocessed_pairs)} unseen, cap={max_new})."
+                )
+            else:
+                final_pairs = unprocessed_pairs
+
+        for item_id, entry in final_pairs:
             entry_title = html.escape(entry.title) if hasattr(entry, 'title') and entry.title else ''
             entry_author = html.escape(entry.author) if hasattr(entry, 'author') and entry.author else ''
             safe_hashtags = html.escape(custom_hashtags) if custom_hashtags else ''
-
-            if not force_single and item_id in processed_ids:
-                continue
 
             # Format Caption parts
             author_text = f"\n<i>By: {entry_author}</i>" if author_enabled and 'author' in entry else ""
@@ -979,6 +1003,11 @@ async def _process_single_feed(bot_instance, feed: dict, force_single: bool = Fa
             await db.db.rss_processed.bulk_write(ops, ordered=False)
         except Exception as e:
             log.warning(f"bulk mark_processed error for {feed_url}: {e}")
+
+        try:
+            await db.enforce_processed_cap(chat_id, feed_url, config.RSS_PROCESSED_CACHE_CAP)
+        except Exception as e:
+            log.warning(f"enforce_processed_cap error for {feed_url}: {e}")
 
 async def send_latest_item(bot_instance, feed: dict):
     await _process_single_feed(bot_instance, feed, force_single=True)
