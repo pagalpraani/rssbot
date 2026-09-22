@@ -80,7 +80,10 @@ async def build_rss_home():
     """Builds the (text, keyboard) for the RSS dashboard's chat-selector home screen."""
     chats = _sort_chats(await db.get_all_bot_chats())
     if not chats:
-        return "📡 <b>RSS Dashboard</b>\n\nNo chats found. Add me to a channel or group as admin first.", None
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Add New Chat", callback_data="rss_add_new_chat")]
+        ])
+        return "📡 <b>RSS Dashboard</b>\n\nNo chats linked yet. Add me to a channel or group as admin, then tap below to link it.", kb
 
     kb = get_pagination_keyboard(
         chats, 0, 10, "rss_chat_",
