@@ -10,6 +10,7 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from ...utils.permissions import owner_only
 from ...utils.help_registry import HelpRegistry
+from ...utils.logger import log
 
 router = Router()
 
@@ -118,19 +119,6 @@ def get_main_help_keyboard():
     for name, key in modules:
         builder.button(text=name, callback_data=f"help_view:{key}")
     builder.adjust(2)
-
-    builder.row(types.InlineKeyboardButton(text="👨‍💻 Developer", callback_data="help_dev"))
-    return builder.as_markup()
-
-def get_dev_keyboard():
-    builder = InlineKeyboardBuilder()
-    modules = HelpRegistry.get_all(chat_type="dev")
-
-    for name, key in modules:
-        builder.button(text=name, callback_data=f"help_view:{key}")
-    builder.adjust(2)
-
-    builder.row(types.InlineKeyboardButton(text="◁ Back", callback_data="help_main"))
     return builder.as_markup()
 
 def get_formatting_keyboard():
@@ -146,16 +134,18 @@ def get_formatting_keyboard():
 @owner_only
 async def help_command(message: types.Message, bot: Bot):
     help_text = "<b>❓ Help Center</b>\n\nSelect a module to see its commands."
+    kb = get_main_help_keyboard()
+
+    if message.chat.type == "private":
+        # Already in PM — just answer directly, no need to route through bot.send_message.
+        await message.answer(help_text, parse_mode="HTML", reply_markup=kb)
+        return
+
     try:
-        await bot.send_message(
-            message.from_user.id,
-            help_text,
-            parse_mode="HTML",
-            reply_markup=get_main_help_keyboard()
-        )
-        if message.chat.type != "private":
-            await message.reply("Help menu sent to your PM.", parse_mode="HTML")
-    except Exception:
+        await bot.send_message(message.from_user.id, help_text, parse_mode="HTML", reply_markup=kb)
+        await message.reply("Help menu sent to your PM.", parse_mode="HTML")
+    except Exception as e:
+        log.error(f"Failed to DM help menu to {message.from_user.id}: {e}")
         await message.reply("Please start me in PM first to access the help menu.", parse_mode="HTML")
 
 @router.callback_query(F.data == "help_main")
@@ -167,21 +157,11 @@ async def help_main_callback(query: types.CallbackQuery):
     finally:
         await query.answer()
 
-@router.callback_query(F.data == "help_dev")
-@owner_only
-async def help_dev_callback(query: types.CallbackQuery):
-    text = "<b>👨‍💻 Developer Modules</b>\nSelect a module:"
-    try:
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_dev_keyboard())
-    finally:
-        await query.answer()
-
 @router.callback_query(F.data.startswith("help_view:"))
 @owner_only
 async def help_view_callback(query: types.CallbackQuery):
     # help_view:key
     key = query.data.split(":", 1)[1]
-    is_dev = key.startswith("dev_")
 
     try:
         if key == "formatting":
@@ -200,7 +180,7 @@ async def help_view_callback(query: types.CallbackQuery):
             help_text = help_text.replace("<b>", f"<b>{icon} ", 1)
 
         builder = InlineKeyboardBuilder()
-        builder.button(text="◁ Back", callback_data="help_dev" if is_dev else "help_main")
+        builder.button(text="◁ Back", callback_data="help_main")
 
         await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=builder.as_markup())
     finally:
