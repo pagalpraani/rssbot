@@ -150,16 +150,13 @@ class LogManager:
         Accepts generic types for actor/target.
         """
         settings = await db.get_settings(chat_id) or {}
-        log_channel = settings.get("log_channel")
+        log_channel = settings.get("log_channel_id")
 
         if not log_channel:
             return
 
-        # Check Module-Specific Toggle
-        # e.g. log_admin_enabled, log_misban_enabled
-        toggle_key = f"log_{module.lower()}_enabled"
-        # Default to True if not present to preserve legacy behavior
-        if not settings.get(toggle_key, True):
+        # Global on/off toggle for this chat
+        if not settings.get("log_enabled", True):
             return
 
         # Determine if we should use KV format (Admin module actions)
@@ -246,9 +243,8 @@ class LogManager:
         if not log_channel_id:
             return
 
-        # Check Module-Specific Toggle
-        toggle_key = f"log_{module.lower()}_enabled"
-        if not settings.get(toggle_key, True):
+        # Global on/off toggle for this chat
+        if not settings.get("log_enabled", True):
             return
 
         context_parts = []
