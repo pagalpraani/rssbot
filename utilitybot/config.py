@@ -51,37 +51,15 @@ DB_NAME = get_env_variable("DB_NAME", default="RSSFeedBot")
 LOG_LEVEL = get_env_variable("LOG_LEVEL", default="INFO").upper()
 DEV_LOG_CHANNEL = get_env_variable("DEV_LOG_CHANNEL", is_int=True, default=0)
 
-# --- Data Retention ---
-RETENTION_DAYS = get_env_variable("RETENTION_DAYS", is_int=True, default=90)
-
-# --- Metrics ---
-METRICS_ENABLED = get_env_variable("METRICS_ENABLED", default="true").lower() == "true"
-
-# --- Auto-Deletion Delays ---
-COMMAND_DELETE_DELAY = get_env_variable("COMMAND_DELETE_DELAY", is_int=True, default=60)
-PROMPT_DELETE_DELAY = get_env_variable("BOT_PROMPT_DELETE_DELAY", is_int=True, default=600)
-
-# --- Internationalization ---
-DEFAULT_TIMEZONE = get_env_variable("DEFAULT_TIMEZONE", default="UTC")
-
 # --- RSS Media Relay ---
 # Cloudflare Worker that proxies oversized Telegram media downloads.
-# WARNING: the default below points at a third party's personal Worker
-# (not something Anthropic or this codebase controls). It's fine for a
-# quick test, but set RSS_RELAY_BASE in your .env to your own deployed
-# worker before running this in production — your media traffic
-# currently passes through someone else's infrastructure otherwise.
 RSS_RELAY_BASE = get_env_variable(
     "RSS_RELAY_BASE",
     default="https://media-relay.gurjar56.workers.dev"
 )
 
 # --- RSS Feed Item Cache ---
-# How many "already posted" item records to keep per feed, PERSISTENTLY (no
-# time-based expiry). Previously this used a 90-day TTL, which meant a feed
-# that kept the same items in its XML for longer than 90 days would have
-# them "forgotten" and re-sent as if new. A count-based cap avoids that while
-# still bounding storage for long-running feeds.
+# How many "already posted" item records to keep per feed, Persistently.
 RSS_PROCESSED_CACHE_CAP = get_env_variable("RSS_PROCESSED_CACHE_CAP", is_int=True, default=1000)
 
 # Safety cap: the max number of items actually POSTED to a chat in a single
