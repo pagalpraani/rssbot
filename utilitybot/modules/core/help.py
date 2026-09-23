@@ -7,6 +7,7 @@
 
 from aiogram import Router, F, Bot, types
 from aiogram.filters import Command
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from ...utils.permissions import owner_only
 from ...utils.help_registry import HelpRegistry
@@ -44,7 +45,6 @@ HELP_TEXT_MARKDOWN = (
     "  Red: <code>[No](buttonurl#danger://example.com)</code>\n"
     "• Stacked Button: Append <code>:same</code> to add it to the previous row.\n"
     "  <i>Example:</i> <code>[Yes](buttonurl#success://link:same)</code>\n"
-    "• Note Link: <code>[Read Rules](buttonurl://#rules)</code>\n"
 )
 
 HELP_TEXT_FILLINGS = (
@@ -61,8 +61,7 @@ HELP_TEXT_FILLINGS = (
     "• <code>{chatname}</code>: Title of the chat.\n"
     "• <code>{count}</code>: Current member count.\n"
     "• <code>{date}</code>: Current date and time.\n"
-    "• <code>{pinned}</code>: Link to the pinned message.\n"
-    "• <code>{rules}</code>: Link to chat rules (if set).\n\n"
+    "• <code>{pinned}</code>: Link to the pinned message.\n\n"
     "<b>Message Flags (Control Behavior):</b>\n"
     "Put these tags anywhere in your message to enable features:\n"
     "• <code>{preview}</code>: Enable link preview.\n"
@@ -121,7 +120,18 @@ def get_main_help_keyboard():
     builder.adjust(2)
     return builder.as_markup()
 
+def get_formatting_overview_keyboard():
+    # Used for the Formatting overview screen itself — Back goes to the main list.
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Markdown", callback_data="help_fmt_markdown")
+    builder.button(text="Fillings", callback_data="help_fmt_fillings")
+    builder.button(text="Random Content", callback_data="help_fmt_random")
+    builder.adjust(2)
+    builder.row(types.InlineKeyboardButton(text="◁ Back", callback_data="help_main"))
+    return builder.as_markup()
+
 def get_formatting_keyboard():
+    # Used for the Markdown/Fillings/Random submenus — Back returns to the overview.
     builder = InlineKeyboardBuilder()
     builder.button(text="Markdown", callback_data="help_fmt_markdown")
     builder.button(text="Fillings", callback_data="help_fmt_fillings")
@@ -129,6 +139,18 @@ def get_formatting_keyboard():
     builder.adjust(2)
     builder.row(types.InlineKeyboardButton(text="◁ Back", callback_data="help_view:formatting"))
     return builder.as_markup()
+
+async def _safe_edit(query: types.CallbackQuery, text: str, reply_markup):
+    """
+    edit_text, but treats Telegram's "message is not modified" (e.g. from a
+    double-tap landing on the exact same screen) as a harmless no-op instead
+    of a real error.
+    """
+    try:
+        await query.message.edit_text(text, parse_mode="HTML", reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower():
+            raise
 
 @router.message(Command("help", prefix="!/"), F.chat.type.in_({"private", "group", "supergroup"}))
 @owner_only
@@ -158,7 +180,7 @@ async def help_command(message: types.Message, bot: Bot):
 async def help_main_callback(query: types.CallbackQuery):
     help_text = "<b>❓ Help Center</b>\n\nSelect a module to see its commands."
     try:
-        await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_main_help_keyboard())
+        await _safe_edit(query, help_text, get_main_help_keyboard())
         await query.answer()
     except Exception:
         log.exception("help_main_callback failed")
@@ -176,7 +198,7 @@ async def help_view_callback(query: types.CallbackQuery):
             icon = HELP_MODULE_ICONS.get(key, "")
             if icon:
                 help_text = help_text.replace("<b>", f"<b>{icon} ", 1)
-            await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=get_formatting_keyboard())
+            await _safe_edit(query, help_text, get_formatting_overview_keyboard())
             await query.answer()
             return
 
@@ -190,7 +212,7 @@ async def help_view_callback(query: types.CallbackQuery):
         builder = InlineKeyboardBuilder()
         builder.button(text="◁ Back", callback_data="help_main")
 
-        await query.message.edit_text(help_text, parse_mode="HTML", reply_markup=builder.as_markup())
+        await _safe_edit(query, help_text, builder.as_markup())
         await query.answer()
     except Exception:
         log.exception(f"help_view_callback failed for key={key!r}")
@@ -215,7 +237,7 @@ async def help_fmt_callback(query: types.CallbackQuery):
     builder.button(text="◁ Back", callback_data="help_view:formatting")
 
     try:
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+        await _safe_edit(query, text, builder.as_markup())
         await query.answer()
     except Exception:
         log.exception("help_fmt_callback failed")
