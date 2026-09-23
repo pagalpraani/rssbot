@@ -29,22 +29,17 @@ HelpRegistry.register(
 )
 
 # --- Command Handler ---
-@router.message(Command("logchannel", prefix="!/"))
+@router.message(Command("logchannel", prefix="!/"), F.chat.type.in_({"group", "supergroup"}))
 @owner_only
 async def logchannel_command(message: Message, bot: Bot):
-    chat_type = message.chat.type
+    await _set_log_channel(message, bot)
 
-    # 1. Determine Permission based on Chat Type
-    if chat_type in ["group", "supergroup"]:
-        db_key = "log_channel"
-        log_type = "Group"
+@router.channel_post(Command("logchannel", prefix="!/"))
+@owner_only
+async def logchannel_command_channel(message: Message, bot: Bot):
+    await _set_log_channel(message, bot)
 
-    elif chat_type == "channel":
-        db_key = "log_channel_id"
-        log_type = "Channel"
-    else:
-        return
-
+async def _set_log_channel(message: Message, bot: Bot):
     args = message.text.split()
     if len(args) < 2:
         await message.reply("Usage: <code>/logchannel &lt;channel_id|off&gt;</code>", parse_mode="HTML")
@@ -52,7 +47,7 @@ async def logchannel_command(message: Message, bot: Bot):
 
     val = args[1].lower()
     if val == "off":
-        await db.update_settings(message.chat.id, {db_key: None})
+        await db.update_settings(message.chat.id, {"log_channel_id": None})
         await message.reply("✅ Logging disabled.", parse_mode="HTML")
         return
 
@@ -61,8 +56,8 @@ async def logchannel_command(message: Message, bot: Bot):
         # Verify access
         try:
             chat = await bot.get_chat(channel_id)
-            await db.update_settings(message.chat.id, {db_key: channel_id})
-            await message.reply(f"✅ {log_type} Log channel set to: <b>{html.escape(chat.title)}</b> (<code>{channel_id}</code>)", parse_mode="HTML")
+            await db.update_settings(message.chat.id, {"log_channel_id": channel_id})
+            await message.reply(f"✅ Log channel set to: <b>{html.escape(chat.title)}</b> (<code>{channel_id}</code>)", parse_mode="HTML")
         except Exception as e:
             await message.reply(f"❌ Could not access channel: {html.escape(str(e))}. Make sure I am admin there.", parse_mode="HTML")
     except ValueError:
@@ -77,35 +72,16 @@ SETTINGS_SCHEMA = {
     "icon": "📜",
     "supported_chat_types": ["group", "supergroup", "channel"],
     "fields": {
-        # --- GROUP SETTINGS ---
-        "log_channel": {
-            "type": "input",
-            "label": "Group Log Channel",
-            "icon": "🛡️",
-            "description": "Channel ID for admin logs (e.g. -100...)",
-            "required_chat_types": ["group", "supergroup"]
-        },
-        "log_admin_enabled": {
-            "type": "bool",
-            "label": "Log Admin Actions",
-            "description": "Log bans, mutes, and kicks.",
-            "required_chat_types": ["group", "supergroup"],
-            "default": True
-        },
-
-        # --- CHANNEL SETTINGS ---
         "log_channel_id": {
             "type": "input",
-            "label": "Channel Log Channel",
-            "icon": "📢",
-            "description": "Channel ID for post logs.",
-            "required_chat_types": ["channel"]
+            "label": "Log Channel",
+            "icon": "🛡️",
+            "description": "Channel ID where logs for this chat will be sent (e.g. -100...)."
         },
-        "log_posts_enabled": {
+        "log_enabled": {
             "type": "bool",
-            "label": "Log Posts",
-            "description": "Log post submissions and distributions.",
-            "required_chat_types": ["channel"],
+            "label": "Logging",
+            "description": "Turn logging on or off for this chat.",
             "default": True
         }
     }
