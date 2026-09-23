@@ -26,6 +26,7 @@ from aiogram.exceptions import TelegramRetryAfter
 from utilitybot.database.mongodb import db
 from utilitybot.utils.logger import log
 from utilitybot.utils.formatter import split_caption as _split_caption
+from utilitybot.utils.log_manager import LogManager
 from utilitybot import config
 
 # ---------------------------------------------------------------------------
@@ -984,8 +985,23 @@ async def _process_single_feed(bot_instance, feed: dict, force_single: bool = Fa
                 f"backoff {delay // 60}m, retry after {retry_after.isoformat()}): "
                 f"{feed_url} — {e}"
             )
+            # Only alert once the feed has hit the longest backoff tier — avoids
+            # spamming the log channel for every ordinary network blip.
+            if fail_count == _BACKOFF_MAX_FAILS:
+                try:
+                    await LogManager.log_group(
+                        chat_id, "WARN", "RSS",
+                        f"Feed has failed {fail_count} times in a row and is now on "
+                        f"the longest retry backoff ({delay // 60}m): {feed_url}\n{e}"
+                    )
+                except Exception:
+                    pass
         else:
             log.error(f"Error fetching feed {feed_url}: {e}")
+            try:
+                await LogManager.log_group(chat_id, "ERROR", "RSS", f"Feed error: {feed_url}\n{e}")
+            except Exception:
+                pass
 
     # Bulk-mark all newly processed items in one DB round-trip
     if newly_processed:
@@ -1094,5 +1110,11 @@ async def fetch_and_process_feeds(bot_instance):
             for feed in due_feeds
         ]
         await asyncio.gather(*tasks, return_exceptions=True)
+    except Exception as e:
+        log.error(f"fetch_and_process_feeds cycle failed: {e}")
+        try:
+            await LogManager.log_dev("ERROR", "RSS", f"RSS fetch cycle crashed: {e}")
+        except Exception:
+            pass
     finally:
         _is_fetching = False
