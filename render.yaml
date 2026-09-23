@@ -7,13 +7,15 @@
 
 services:
   - type: web
-    name: tg-utility-bot
+    name: rss-bot
     env: python
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python -m utilitybot.main"
     healthCheckPath: /health
     envVars:
       - key: BOT_TOKEN
+        sync: false
+      - key: WEBHOOK_URL
         sync: false
       - key: MONGO_URI
         sync: false
@@ -23,7 +25,9 @@ services:
         sync: false
       - key: LOG_LEVEL
         value: INFO
-      - key: RETENTION_DAYS
-        value: 90
-      - key: METRICS_ENABLED
-        value: true
+      - key: DEV_LOG_CHANNEL
+        sync: false
+      - key: RSS_PROCESSED_CACHE_CAP
+        value: 1000
+      - key: RSS_MAX_NEW_ITEMS_PER_CYCLE
+        value: 30
