@@ -121,7 +121,6 @@ class MongoDB:
         await self.db.user_shares.create_index("managed_groups.chat_id", background=True)
 
         # Analytics & Stats
-        await self.db.global_users.create_index("user_id", unique=True, background=True)
         await self.db.bot_chats.create_index("chat_id", unique=True, background=True)
 
         # RSS: these are hit on every poll cycle — critical for performance
@@ -195,22 +194,6 @@ class MongoDB:
             log.warning(f"rss_settings index error (non-fatal): {e}")
 
         log.info("Database indexes setup complete.")
-
-    async def get_verified_user(self, user_id: int) -> dict:
-        """
-        Retrieves verification details for a user.
-        """
-        return await self.db.verified_users.find_one({"_id": user_id})
-
-    async def is_user_deleted(self, user_id: int) -> bool:
-        """
-        Checks if a user is soft-deleted.
-        """
-        user = await self.db.users.find_one({"_id": user_id})
-        return bool(user and user.get("deleted"))
-
-    async def get_global_user_info(self, user_id: int):
-        return await self.db.global_users.find_one({"user_id": user_id})
 
     # --- Chat Tracking ---
     async def add_bot_chat(self, chat_id: int, title: str, username: str, link: str, chat_type: str = "group"):
