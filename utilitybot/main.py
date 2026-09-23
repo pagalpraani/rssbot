@@ -16,6 +16,7 @@ if project_root not in sys.path:
 import aiohttp
 import uvloop
 from aiogram import Bot, Dispatcher
+from aiogram.types import ErrorEvent
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
@@ -93,6 +94,34 @@ def main():
     )
     bot = Bot(token=config.BOT_TOKEN, session=session)
     dp = Dispatcher()
+
+    @dp.error()
+    async def global_error_handler(event: ErrorEvent):
+        """
+        Last-resort safety net: catches any exception a handler didn't
+        already deal with, so a bug degrades to a visible error message
+        instead of the update silently vanishing.
+        """
+        log.exception(f"Unhandled exception: {event.exception}")
+        try:
+            await LogManager.log_dev(
+                "ERROR", "Unhandled",
+                f"{type(event.exception).__name__}: {event.exception}"
+            )
+        except Exception:
+            pass
+
+        try:
+            if event.update.callback_query:
+                await event.update.callback_query.answer(
+                    "⚠️ Something went wrong. Check the bot logs.", show_alert=True
+                )
+            elif event.update.message:
+                await event.update.message.reply("⚠️ Something went wrong processing that. Check the bot logs.")
+        except Exception:
+            pass
+
+        return True
 
 
     # Global rate limiting — runs before any other middleware or handler
