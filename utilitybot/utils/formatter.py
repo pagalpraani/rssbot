@@ -241,7 +241,7 @@ def _handle_random_content(text: str) -> str:
 # ===================================================
 
 
-_FILLINGS_PATTERN = re.compile(r"\{first\}|\{last\}|\{fullname\}|\{username\}|\{mention\}|\{id\}|\{chatname\}|\{name\}|\{count\}|\{date\}|\{pinned\}|\{rules\}|\{channels\}")
+_FILLINGS_PATTERN = re.compile(r"\{first\}|\{last\}|\{fullname\}|\{username\}|\{mention\}|\{id\}|\{chatname\}|\{name\}|\{count\}|\{date\}|\{pinned\}")
 
 async def _handle_fillings(text: str, user, chat, settings, bot):
     """Handle all variable replacements"""
@@ -297,11 +297,6 @@ async def _handle_fillings(text: str, user, chat, settings, bot):
         return ""
     
     def _get_date(): return datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    def _get_rules(): return settings.get("rules_url", "")
-    def _get_channels():
-        chans = settings.get("channels", [])
-        return html.escape(", ".join(map(str, chans))) if isinstance(chans, list) else ""
 
     # Since 'count' and 'pinned' require async operations, we pre-evaluate them if present in text
     count_val = await _get_count() if "{count}" in text else "N/A"
@@ -319,8 +314,6 @@ async def _handle_fillings(text: str, user, chat, settings, bot):
         "{count}": lambda: count_val,
         "{date}": lambda: _get_date(),
         "{pinned}": lambda: pinned_val,
-        "{rules}": lambda: _get_rules(),
-        "{channels}": lambda: _get_channels()
     }
     
     # Evaluate lambdas only for matched keys and cache them
