@@ -79,13 +79,23 @@ async def settings_handler(message: types.Message, state: FSMContext):
         pass
 
 
-@router.message(Command("settings", prefix="!/"), F.chat.type.in_({"group", "supergroup", "channel"}))
+@router.message(Command("settings", prefix="!/"), F.chat.type.in_({"group", "supergroup"}))
 async def settings_handler_in_chat(message: types.Message, bot: Bot):
     """Run /settings directly inside a chat to jump straight to its module list."""
     if message.from_user.id != config.OWNER_ID:
         return
+    await _open_module_selector_in_chat(message)
 
-    await db.add_managed_group(message.from_user.id, message.chat.id, message.chat.title or str(message.chat.id), message.chat.type)
+@router.channel_post(Command("settings", prefix="!/"))
+async def settings_handler_in_channel(message: types.Message, bot: Bot):
+    # Channel posts arrive as a separate update type from regular messages —
+    # without this, /settings silently did nothing when run inside a channel.
+    if not message.from_user or message.from_user.id != config.OWNER_ID:
+        return
+    await _open_module_selector_in_chat(message)
+
+async def _open_module_selector_in_chat(message: types.Message):
+    await db.add_managed_group(config.OWNER_ID, message.chat.id, message.chat.title or str(message.chat.id), message.chat.type)
 
     markup = LayoutBuilder.build_module_selector(message.chat, page=0)
     icon = "📢" if message.chat.type == "channel" else "💬"
