@@ -11,6 +11,7 @@ from aiogram.types import (
     Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberUpdated,
 )
 from ...utils.logger import get_logger
+from ...utils.log_manager import LogManager
 from ...database.mongodb import db
 import html
 
@@ -127,11 +128,25 @@ async def track_chat_membership(update: ChatMemberUpdated):
             invite_link = getattr(chat, "invite_link", None) or ""
             await db.add_bot_chat(chat.id, chat.title or str(chat.id), username, invite_link, chat.type)
             log.info(f"Registered chat {chat.id} ({chat.title}) — status: {new_status}")
+            try:
+                await LogManager.log_dev(
+                    "INFO", "ChatTracking",
+                    f"Added to {chat.type}: <b>{html.escape(chat.title or str(chat.id))}</b> (<code>{chat.id}</code>) — status: {new_status}"
+                )
+            except Exception:
+                pass
         except Exception as e:
             log.error(f"Failed to register chat {chat.id}: {e}")
     elif new_status in ("left", "kicked"):
         try:
             await db.remove_bot_chat(chat.id)
             log.info(f"Removed chat {chat.id} ({chat.title}) — bot was {new_status}")
+            try:
+                await LogManager.log_dev(
+                    "WARN", "ChatTracking",
+                    f"Removed from {chat.type}: <b>{html.escape(chat.title or str(chat.id))}</b> (<code>{chat.id}</code>) — {new_status}"
+                )
+            except Exception:
+                pass
         except Exception as e:
             log.error(f"Failed to remove chat {chat.id}: {e}")
