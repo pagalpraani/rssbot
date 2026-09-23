@@ -10,6 +10,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InputMediaPhoto, InputM
 from ..database.mongodb import db
 from ..utils.formatter import unparse, format_message, split_caption as _split_caption
 from ..utils.logger import get_logger
+from ..utils.log_manager import LogManager
 import html
 import re
 import asyncio
@@ -442,6 +443,10 @@ class ContentPipeline:
 
         except Exception as e:
             log.error(f"Watermark Engine error on {file_id}: {e}")
+            try:
+                await LogManager.log_group(chat_id, "ERROR", "Watermark", f"Watermark processing failed: {e}")
+            except Exception:
+                pass
             if 'temp_file_path' in locals() and os.path.exists(temp_file_path) and not isinstance(file_id, (str, FSInputFile)):
                 os.remove(temp_file_path)
 
