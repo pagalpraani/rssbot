@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Main
-# Path: utilitybot/main.py
+# Path: main.py
 # Description: Main application entry point. Initializes the bot, database, and
 #              registers all routers.
 # =============================================================================
@@ -9,7 +9,7 @@
 import sys
 import os
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -20,17 +20,18 @@ from aiogram.types import ErrorEvent
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
-from utilitybot.database.mongodb import db
-from utilitybot.utils.rate_limit_middleware import MessageRateLimitMiddleware, CallbackRateLimitMiddleware
-from utilitybot.utils.logger import log
-from utilitybot import config
-from utilitybot import modules
-from utilitybot.modules.marginals.middleware import MarginalsMiddleware
-from utilitybot.modules.blocklist.middleware import BlocklistMiddleware
-from utilitybot.modules.replacements.middleware import ReplacementsMiddleware
-from utilitybot.utils import scheduler
-from utilitybot.utils.log_manager import LogManager
-from utilitybot.utils import settings_cache
+
+from database.mongodb import db
+from utils.rate_limit_middleware import MessageRateLimitMiddleware, CallbackRateLimitMiddleware
+from utils.logger import log
+import config
+import modules
+from modules.marginals.middleware import MarginalsMiddleware
+from modules.blocklist.middleware import BlocklistMiddleware
+from modules.replacements.middleware import ReplacementsMiddleware
+from utils import scheduler
+from utils.log_manager import LogManager
+from utils import settings_cache
 
 # Configuration
 WEBHOOK_PATH = "/webhook"
@@ -72,7 +73,7 @@ async def on_shutdown(bot: Bot):
     """
     Actions to perform on bot shutdown.
     """
-    from utilitybot.modules.rss.service import close_http_session
+    from modules.rss.service import close_http_session
     scheduler.stop_rss_polling()
     await close_http_session()
     await db.close()
