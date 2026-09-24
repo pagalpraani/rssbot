@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: RSS Service
-# Path: utilitybot/modules/rss/service.py
+# Path: modules/rss/service.py
 # Description: Core RSS background worker for fetching, parsing, and watermarking multimedia content.
 # =============================================================================
 
@@ -19,15 +19,15 @@ import re
 import html
 from collections import OrderedDict
 from PIL import Image, ImageSequence, UnidentifiedImageError
-from utilitybot.utils.watermark import process_image_sync, process_pdf_sync
+from utils.watermark import process_image_sync, process_pdf_sync
 from datetime import datetime, timezone, timedelta
 from aiogram.types import FSInputFile, InputMediaPhoto, InputMediaDocument
 from aiogram.exceptions import TelegramRetryAfter
-from utilitybot.database.mongodb import db
-from utilitybot.utils.logger import log
-from utilitybot.utils.formatter import split_caption as _split_caption
-from utilitybot.utils.log_manager import LogManager
-from utilitybot import config
+from database.mongodb import db
+from utils.logger import log
+from utils.formatter import split_caption as _split_caption
+from utils.log_manager import LogManager
+import config
 
 # ---------------------------------------------------------------------------
 # Telegram bot upload limit is 50 MB.
@@ -422,7 +422,7 @@ async def _process_single_feed(bot_instance, feed: dict, force_single: bool = Fa
             await db.clear_feed_failures(chat_id, feed_url)
 
         feed_title = html.escape(custom_feed_title) if custom_feed_title else html.escape(raw_feed_title)
-        from utilitybot.utils.content_pipeline import ContentPipeline
+        from utils.content_pipeline import ContentPipeline
 
         # Bulk-fetch of processed IDs ran concurrently with the feed download above.
         # For force_single mode it's an empty set (we want to re-send regardless).
@@ -593,8 +593,8 @@ async def _process_single_feed(bot_instance, feed: dict, force_single: bool = Fa
                 if limit == 0: limit = 4096
                 else: limit = min(limit, 4096)
 
-                from utilitybot.utils.content_pipeline import ContentPipeline
-                from utilitybot.utils.formatter import chunk_html
+                from utils.content_pipeline import ContentPipeline
+                from utils.formatter import chunk_html
                 if len(msg_text) > limit:
                     chunks = chunk_html(msg_text, limit)
                     for chunk in chunks:
@@ -859,7 +859,7 @@ async def _process_single_feed(bot_instance, feed: dict, force_single: bool = Fa
                 _limit = feed.get('length_limit', 0)
                 if _limit == 0: _limit = 4096
                 else: _limit = min(_limit, 4096)
-                from utilitybot.utils.formatter import chunk_html
+                from utils.formatter import chunk_html
                 chunks = chunk_html(text, _limit)
                 _no_marginals_kwargs = dict(_pipe_kwargs, use_marginals=False)
                 for chunk in chunks:
