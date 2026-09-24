@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Modules Package
-# Path: utilitybot/modules/__init__.py
+# Path: modules/__init__.py
 # Description: Registers every active module. Only modules that exist on disk
 #              for the RSS-focused bot are listed here.
 # =============================================================================
