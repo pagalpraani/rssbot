@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: RSS Handlers
-# Path: utilitybot/modules/rss/handlers.py
+# Path: modules/rss/handlers.py
 # Description: Handles RSS configuration commands and channel subscription operations.
 # =============================================================================
 
@@ -9,9 +9,9 @@ import urllib.parse
 from aiogram import Router, F, Bot
 from aiogram.types import Message
 from aiogram.filters import Command
-from utilitybot.database.mongodb import db
-from utilitybot.utils.logger import log
-from utilitybot.utils.help_registry import HelpRegistry
+from database.mongodb import db
+from utils.logger import log
+from utils.help_registry import HelpRegistry
 
 router = Router(name="rss_router")
 
@@ -36,10 +36,11 @@ HelpRegistry.register(
     "- Logo, footer, and PDF name settings are managed via the Watermark module.",
     supported_chat_types=["channel", "group", "supergroup"]
 )
+
 async def _mark_all_existing_items(chat_id: int, url: str):
     import asyncio
     import feedparser
-    from utilitybot.database.mongodb import db
+    from database.mongodb import db
     loop = asyncio.get_running_loop()
     try:
         parsed = await asyncio.wait_for(
