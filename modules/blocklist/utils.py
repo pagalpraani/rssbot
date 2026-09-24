@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Blocklist
-# Path: utilitybot/modules/blocklist/utils.py
+# Path: modules/blocklist/utils.py
 # Description: Utility functions and helpers for operations related to Blocklist.
 # =============================================================================
 
