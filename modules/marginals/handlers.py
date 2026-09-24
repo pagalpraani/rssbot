@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Marginals
-# Path: utilitybot/modules/marginals/handlers.py
+# Path: modules/marginals/handlers.py
 # Description: Message and callback handlers for the Marginals module. Provides
 #              routing and command execution.
 # =============================================================================
@@ -8,20 +8,17 @@
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup
-from ...database.mongodb import db
-from ...utils.settings_layout import SettingsRegistry
-from ...utils.help_registry import HelpRegistry
-from ...utils.formatter import format_message, unparse
-from ...utils.logger import get_logger
-from ...utils.permissions import owner_only
+from database.mongodb import db
+from utils.settings_layout import SettingsRegistry
+from utils.help_registry import HelpRegistry
+from utils.formatter import format_message, unparse
+from utils.logger import get_logger
+from utils.permissions import owner_only
 import html
 import re
 import asyncio
 
 log = get_logger(__name__)
-# REMOVED: print("🔥 MARGINALS MODULE LOADED")
-# The middleware approach makes this handler obsolete.
-# I am keeping command handlers but removing the listener.
 
 router = Router()
 
@@ -126,6 +123,3 @@ async def toggle_marginals(message: Message):
     state = args[1].lower() in ["on", "yes"]
     await db.update_settings(message.chat.id, {"marginals_enabled": state})
     await message.answer(f"Marginals {'enabled' if state else 'disabled'}.", parse_mode="HTML")
-
-# --- Logic has been moved to Middleware ---
-# The generic listener @router.channel_post() is removed to prevent handler conflicts.
