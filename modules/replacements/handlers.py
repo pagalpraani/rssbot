@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Replacements
-# Path: utilitybot/modules/replacements/handlers.py
+# Path: modules/replacements/handlers.py
 # Description: Message and callback handlers for the Replacements module. Provides
 #              routing and command execution.
 # =============================================================================
@@ -8,12 +8,12 @@
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.types import Message
-from ...database.mongodb import db
-from ...utils.settings_layout import SettingsRegistry
-from ...utils.help_registry import HelpRegistry
-from ...utils.formatter import unparse
-from ...utils.content_pipeline import ContentPipeline
-from ...utils.permissions import owner_only
+from database.mongodb import db
+from utils.settings_layout import SettingsRegistry
+from utils.help_registry import HelpRegistry
+from utils.formatter import unparse
+from utils.content_pipeline import ContentPipeline
+from utils.permissions import owner_only
 import html
 import unicodedata
 import shlex
