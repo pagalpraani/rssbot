@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Admin Cache
-# Path: utilitybot/utils/admin_cache.py
+# Path: utils/admin_cache.py
 # Description: Utility functions and helpers for operations related to Admin Cache.
 # =============================================================================
 
