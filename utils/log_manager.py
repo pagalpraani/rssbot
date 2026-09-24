@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Log Manager
-# Path: utilitybot/utils/log_manager.py
+# Path: utils/log_manager.py
 # Description: Utility functions and helpers for operations related to Log Manager.
 # =============================================================================
 
@@ -9,9 +9,9 @@ import html
 import logging
 from datetime import datetime, timezone
 from aiogram import Bot, types
-from .. import config
-from ..database.mongodb import db
-from . import settings_cache
+import config
+from database.mongodb import db
+from utils import settings_cache
 
 class LogManager:
     _bot: Bot = None
