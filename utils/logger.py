@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Logger
-# Path: utilitybot/utils/logger.py
+# Path: utils/logger.py
 # Description: Utility functions and helpers for operations related to Logger.
 # =============================================================================
 
@@ -9,7 +9,7 @@ import json
 import logging
 import asyncio
 from datetime import datetime, timezone
-from .. import config
+import config
 
 # We cannot import LogManager here directly to avoid circular imports if LogManager imports logger
 # But LogManager imports `db` and `config` and `aiogram`. `logger` only imports `config`.
@@ -45,7 +45,7 @@ class TelegramLogHandler(logging.Handler):
             return
 
         try:
-            from .log_manager import LogManager
+            from utils.log_manager import LogManager
 
             # Use asyncio to schedule the coroutine, as logging is synchronous
             try:
@@ -56,7 +56,7 @@ class TelegramLogHandler(logging.Handler):
                         # Append exception info
                         msg += f"\n\nTraceback:\n{self.format(record)}"
 
-                    # Truncate if too long for Telegram (4096 limit, keep safe buffer)
+                        # Truncate if too long for Telegram (4096 limit, keep safe buffer)
                     if len(msg) > 3000:
                         msg = msg[:3000] + "... (truncated)"
 
@@ -79,7 +79,7 @@ def setup_logger():
     """
     Configures and returns a logger with a JSON formatter and Telegram Handler.
     """
-    logger = logging.getLogger("CCSUniversityBot")
+    logger = logging.getLogger("RSSFeedBot")
     logger.setLevel(config.LOG_LEVEL)
 
     # Prevent duplicate logs if already configured
@@ -110,4 +110,4 @@ def get_logger(module_name: str):
     """
     Returns a logger for a specific module.
     """
-    return logging.getLogger(f"CCSUniversityBot.{module_name}")
+    return logging.getLogger(f"RSSFeedBot.{module_name}")
