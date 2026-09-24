@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Core
-# Path: utilitybot/modules/core/start.py
+# Path: modules/core/start.py
 # Description: /start command and welcome menu for the RSS Feed Reader bot.
 # Scope: private
 # =============================================================================
@@ -10,9 +10,9 @@ from aiogram.filters import Command
 from aiogram.types import (
     Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberUpdated,
 )
-from ...utils.logger import get_logger
-from ...utils.log_manager import LogManager
-from ...database.mongodb import db
+from utils.logger import get_logger
+from utils.log_manager import LogManager
+from database.mongodb import db
 import html
 
 log = get_logger(__name__)
@@ -63,11 +63,11 @@ async def back_to_start(callback: CallbackQuery):
 
 @router.callback_query(F.data == "start_open_rss")
 async def start_open_rss(callback: CallbackQuery):
-    from ... import config
+    import config
     if callback.from_user.id != config.OWNER_ID:
         await callback.answer("⛔ Owner only.", show_alert=True)
         return
-    from ..rss.dashboard import build_rss_home
+    from modules.rss.dashboard import build_rss_home
     text, kb = await build_rss_home()
     kb_with_back = kb
     if kb is not None:
@@ -80,7 +80,7 @@ async def start_open_rss(callback: CallbackQuery):
 
 @router.callback_query(F.data == "start_open_help")
 async def start_open_help(callback: CallbackQuery):
-    from ... import config
+    import config
     if callback.from_user.id != config.OWNER_ID:
         await callback.answer("⛔ Owner only.", show_alert=True)
         return
