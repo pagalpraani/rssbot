@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Marginals
-# Path: utilitybot/modules/marginals/middleware.py
+# Path: modules/marginals/middleware.py
 # Description: Middleware implementation for the Marginals module. Intercepts and
 #              processes updates before handlers.
 # =============================================================================
@@ -9,8 +9,8 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, TelegramObject
 from aiogram.exceptions import TelegramRetryAfter
 from typing import Callable, Dict, Any, Awaitable
-from ...utils.formatter import unparse
-from ...utils.content_pipeline import ContentPipeline
+from utils.formatter import unparse
+from utils.content_pipeline import ContentPipeline
 import html
 import re
 import asyncio
