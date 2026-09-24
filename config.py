@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Config
-# Path: utilitybot/config.py
+# Path: config.py
 # Description: Configuration loader parsing environment variables and defining global
 #              settings.
 # =============================================================================
