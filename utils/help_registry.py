@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Help Registry
-# Path: utilitybot/utils/help_registry.py
+# Path: utils/help_registry.py
 # Description: Utility functions and helpers for operations related to Help Registry.
 # Scope: channel | group
 # =============================================================================
