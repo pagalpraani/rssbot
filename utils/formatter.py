@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Formatter
-# Path: utilitybot/utils/formatter.py
+# Path: utils/formatter.py
 # Description: Advanced Formatting Module – Enhanced with Full Markdown Support
 #              Handles: In-App Markdown, Syntax Highlighting, Quotes, Collapsible
 #              Quotes.
@@ -12,7 +12,7 @@ import re
 import html
 from typing import Any, Dict, List, Optional, Tuple
 from aiogram.types import Chat, InlineKeyboardButton, InlineKeyboardMarkup, User, MessageEntity
-from . import settings_cache
+from utils import settings_cache
 
 
 def _make_button(text: str, style: Optional[str] = None, **kwargs) -> InlineKeyboardButton:
