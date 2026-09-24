@@ -1,15 +1,15 @@
 # =============================================================================
 # Module: Mongodb
-# Path: utilitybot/database/mongodb.py
+# Path: database/mongodb.py
 # Description: Database models and connection management for MongoDB interaction.
 # =============================================================================
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from .. import config
-from ..utils.logger import get_logger
+import config
+from utils.logger import get_logger
 import asyncio
 from pymongo.errors import ConnectionFailure
-from ..utils import settings_cache
+from utils import settings_cache
 from datetime import datetime, timedelta, timezone
 
 log = get_logger(__name__)
@@ -359,7 +359,6 @@ class MongoDB:
         ids = [doc["_id"] async for doc in cursor]
         if ids:
             await self.db.rss_processed.delete_many({"_id": {"$in": ids}})
-
 
 
 # --- Singleton Instance ---
