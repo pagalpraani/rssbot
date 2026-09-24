@@ -1,16 +1,16 @@
 # =============================================================================
 # Module: Content Pipeline
-# Path: utilitybot/utils/content_pipeline.py
+# Path: utils/content_pipeline.py
 # Description: Utility functions and helpers for operations related to Content
 #              Pipeline.
 # =============================================================================
 
 from aiogram import Bot
 from aiogram.types import Message, InlineKeyboardMarkup, InputMediaPhoto, InputMediaVideo, InputMediaAudio, InputMediaDocument
-from ..database.mongodb import db
-from ..utils.formatter import unparse, format_message, split_caption as _split_caption
-from ..utils.logger import get_logger
-from ..utils.log_manager import LogManager
+from database.mongodb import db
+from utils.formatter import unparse, format_message, split_caption as _split_caption
+from utils.logger import get_logger
+from utils.log_manager import LogManager
 import html
 import re
 import asyncio
@@ -299,7 +299,7 @@ class ContentPipeline:
         import tempfile
         import os
         import io
-        from utilitybot.utils.watermark import process_image_sync, process_pdf_sync
+        from utils.watermark import process_image_sync, process_pdf_sync
 
         try:
             from aiogram.types import FSInputFile
@@ -333,7 +333,7 @@ class ContentPipeline:
                     logo_bytes = None
 
             import asyncio
-            from utilitybot.utils.watermark import _WATERMARK_POOL
+            from utils.watermark import _WATERMARK_POOL
             loop = asyncio.get_event_loop()
 
             if media_type == "photo":
