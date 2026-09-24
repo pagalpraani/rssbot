@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Parser
-# Path: utilitybot/utils/parser.py
+# Path: utils/parser.py
 # Description: Utility functions and helpers for operations related to Parser.
 # =============================================================================
 
@@ -9,7 +9,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import Tuple, Optional
 
 # Import shared button helpers so style support is identical across all pipelines.
-from .formatter import BUTTON_STYLES, _parse_button_token, _make_button
+from utils.formatter import BUTTON_STYLES, _parse_button_token, _make_button
 
 
 _BUTTON_PATTERN = re.compile(r'\[([^\]]+)\]\((buttonurl(?:#[^:)]+)?://[^)]+)\)')
