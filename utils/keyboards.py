@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Keyboards
-# Path: utilitybot/utils/keyboards.py
+# Path: utils/keyboards.py
 # Description: Shared generic InlineKeyboard builders used across multiple modules.
 #              Module-specific keyboards stay in their own module's keyboards.py.
 # =============================================================================
