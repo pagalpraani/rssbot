@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Core
-# Path: utilitybot/modules/core/settings.py
+# Path: modules/core/settings.py
 # Description: Provides core logic and data structures for settings.py.
 # Scope: private | channel | group
 # =============================================================================
@@ -10,13 +10,13 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
-from ...utils import settings_cache
-from ...database.mongodb import db
-from ...utils.settings_layout import SettingsRegistry, LayoutBuilder, SettingsCallback
-from ...utils.permissions import owner_only
-from ...utils.keyboards import get_cancel_kb
-from ...utils.logger import get_logger
-from ... import config
+from utils import settings_cache
+from database.mongodb import db
+from utils.settings_layout import SettingsRegistry, LayoutBuilder, SettingsCallback
+from utils.permissions import owner_only
+from utils.keyboards import get_cancel_kb
+from utils.logger import get_logger
+import config
 import html
 import re
 
@@ -340,7 +340,7 @@ async def settings_nav_handler(callback: types.CallbackQuery, callback_data: Set
             pass
 
     elif action == "admincache":
-        from ...utils.admin_cache import clear_chat_cache
+        from utils.admin_cache import clear_chat_cache
         clear_chat_cache(chat_id)
         await callback.answer("Admin cache cleared.", show_alert=True)
 
