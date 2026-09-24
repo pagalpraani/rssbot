@@ -1,4 +1,7 @@
-# utilitybot/modules/misc/__init__.py
+# =============================================================================
+# Module: Misc Init
+# Path: modules/misc/__init__.py
+# =============================================================================
 
 from aiogram import Router
 from .handlers import router as handlers_router
