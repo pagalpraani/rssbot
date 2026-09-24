@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Core
-# Path: utilitybot/modules/core/handlers.py
+# Path: modules/core/handlers.py
 # Description: Message and callback handlers for the Core module. Provides routing
 #              and command execution.
 # =============================================================================
