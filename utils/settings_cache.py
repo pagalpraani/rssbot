@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Settings Cache
-# Path: utilitybot/utils/settings_cache.py
+# Path: utils/settings_cache.py
 # Description: In-memory TTL cache for per-chat settings and filters. Write-through:
 #              every db.
 # =============================================================================
