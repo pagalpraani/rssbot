@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Misc — Chat Report
-# Path: utilitybot/modules/misc/chat_report.py
+# Path: modules/misc/chat_report.py
 # Description: /chatreport — dumps every active chat with its subscribed RSS
 #              feeds to a downloadable .txt file.
 # =============================================================================
@@ -14,9 +14,9 @@ from aiogram import Router, Bot, F
 from aiogram.filters import Command
 from aiogram.types import Message, FSInputFile
 
-from ...database.mongodb import db
-from ...utils.permissions import owner_only
-from ...utils.logger import log
+from database.mongodb import db
+from utils.permissions import owner_only
+from utils.logger import log
 
 router = Router()
 
