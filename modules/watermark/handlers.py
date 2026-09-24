@@ -1,19 +1,19 @@
 # =============================================================================
 # Module: Watermark Settings
-# Path: utilitybot/modules/watermark/handlers.py
+# Path: modules/watermark/handlers.py
 # Description: Registers the Watermark module to SettingsRegistry and HelpRegistry,
 #              and handles /setlogo, /setfooternote, /setpdfname PM commands.
 # Scope: channel | group | supergroup
 # =============================================================================
 
-from utilitybot import config
+import config
 from aiogram import Router, Bot
 from aiogram.types import Message
 from aiogram.filters import Command
-from utilitybot.utils.settings_layout import SettingsRegistry
-from utilitybot.utils.help_registry import HelpRegistry
-from utilitybot.database.mongodb import db
-from utilitybot.utils.logger import get_logger
+from utils.settings_layout import SettingsRegistry
+from utils.help_registry import HelpRegistry
+from database.mongodb import db
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 router = Router(name="watermark_router")
