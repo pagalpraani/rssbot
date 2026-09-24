@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Blocklist
-# Path: utilitybot/modules/blocklist/handlers.py
+# Path: modules/blocklist/handlers.py
 # Description: Message and callback handlers for the Blocklist module. Provides
 #              routing and command execution.
 # =============================================================================
@@ -8,11 +8,11 @@
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.types import Message
-from ...database.mongodb import db
-from ...utils.settings_layout import SettingsRegistry
-from ...utils.help_registry import HelpRegistry
-from ...utils.logger import get_logger
-from ...utils.permissions import owner_only
+from database.mongodb import db
+from utils.settings_layout import SettingsRegistry
+from utils.help_registry import HelpRegistry
+from utils.logger import get_logger
+from utils.permissions import owner_only
 import html
 import re
 from .utils import invalidate_blocklist_cache
