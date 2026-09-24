@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Blocklist
-# Path: utilitybot/modules/blocklist/middleware.py
+# Path: modules/blocklist/middleware.py
 # Description: Middleware implementation for the Blocklist module. Intercepts and
 #              processes updates before handlers.
 # =============================================================================
@@ -8,8 +8,8 @@
 from aiogram import BaseMiddleware
 from aiogram.types import Message, TelegramObject
 from typing import Callable, Dict, Any, Awaitable
-from ...database.mongodb import db
-from ...utils.logger import get_logger
+from database.mongodb import db
+from utils.logger import get_logger
 from .utils import check_text_blocking
 
 log = get_logger(__name__)
