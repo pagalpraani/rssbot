@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Core
-# Path: utilitybot/modules/core/help.py
+# Path: modules/core/help.py
 # Description: Provides core logic and data structures for help.py.
 # Scope: channel | group
 # =============================================================================
@@ -9,9 +9,9 @@ from aiogram import Router, F, Bot, types
 from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from ...utils.permissions import owner_only
-from ...utils.help_registry import HelpRegistry
-from ...utils.logger import log
+from utils.permissions import owner_only
+from utils.help_registry import HelpRegistry
+from utils.logger import log
 
 router = Router()
 
