@@ -13,4 +13,4 @@ COPY . .
 EXPOSE 8080
 
 # Command to run the bot
-CMD ["python", "-m", "utilitybot.main"]
+CMD ["python", "-m", "main"]
