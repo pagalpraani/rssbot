@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Settings Layout
-# Path: utilitybot/utils/settings_layout.py
+# Path: utils/settings_layout.py
 # Description: Utility functions and helpers for operations related to Settings
 #              Layout.
 # Scope: channel | group
@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Chat
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters.callback_data import CallbackData
-from .. import config
+import config
 
 class SettingsRegistry:
     _modules: Dict[str, Dict[str, Any]] = {}
