@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Formatting
-# Path: utilitybot/utils/formatting.py
+# Path: utils/formatting.py
 # Description: Core sanitization utilities for message formatting. IMPORTANT: - This
 #              sanitizer is for MarkdownV2 safety.
 # =============================================================================
