@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Replacements
-# Path: utilitybot/modules/replacements/middleware.py
+# Path: modules/replacements/middleware.py
 # Description: Middleware implementation for the Replacements module. Intercepts and
 #              processes updates before handlers.
 # =============================================================================
@@ -8,9 +8,9 @@
 from aiogram import BaseMiddleware
 from aiogram.types import Message, TelegramObject
 from typing import Callable, Dict, Any, Awaitable
-from ...utils.formatter import unparse
-from ...utils.content_pipeline import ContentPipeline
-from ...database.mongodb import db
+from utils.formatter import unparse
+from utils.content_pipeline import ContentPipeline
+from database.mongodb import db
 import html
 
 class ReplacementsMiddleware(BaseMiddleware):
