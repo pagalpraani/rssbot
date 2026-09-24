@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Logging
-# Path: utilitybot/modules/logging/handlers.py
+# Path: modules/logging/handlers.py
 # Description: Message and callback handlers for the Logging module. Provides routing
 #              and command execution.
 # Scope: channel | group
@@ -9,10 +9,10 @@
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.types import Message
-from ...utils.settings_layout import SettingsRegistry
-from ...utils.help_registry import HelpRegistry
-from ...utils.permissions import owner_only
-from ...database.mongodb import db
+from utils.settings_layout import SettingsRegistry
+from utils.help_registry import HelpRegistry
+from utils.permissions import owner_only
+from database.mongodb import db
 import html
 
 router = Router()
