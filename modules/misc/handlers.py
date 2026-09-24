@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Misc
-# Path: utilitybot/modules/misc/handlers.py
+# Path: modules/misc/handlers.py
 # Description: Message and callback handlers for the Misc module. Provides routing
 #              and command execution.
 # Scope: private | channel | group
@@ -9,13 +9,13 @@
 from aiogram import Router, F, Bot, types
 from aiogram.types import Message
 from aiogram.filters import Command
-from ...utils.permissions import owner_only
-from ...utils.helpers import reply_to_owner, get_target_user
-from ...utils import admin_cache
-from ...utils.help_registry import HelpRegistry
-from ...database.mongodb import db
-from ...utils.formatter import format_message
-from ...utils.logger import log
+from utils.permissions import owner_only
+from utils.helpers import reply_to_owner, get_target_user
+from utils import admin_cache
+from utils.help_registry import HelpRegistry
+from database.mongodb import db
+from utils.formatter import format_message
+from utils.logger import log
 import html
 import time
 
