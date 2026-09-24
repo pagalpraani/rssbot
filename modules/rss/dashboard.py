@@ -1,16 +1,16 @@
 # =============================================================================
 # Module: RSS Dashboard
-# Path: utilitybot/modules/rss/dashboard.py
+# Path: modules/rss/dashboard.py
 # Description: Owner-only interactive dashboard managing global RSS feed settings via FSM prompts.
 # =============================================================================
 
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
-from utilitybot.database.mongodb import db
-from utilitybot import config
-from utilitybot.utils.logger import log
-from utilitybot.utils.keyboards import get_cancel_kb
+from database.mongodb import db
+import config
+from utils.logger import log
+from utils.keyboards import get_cancel_kb
 
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
@@ -365,7 +365,7 @@ async def process_add_feed(message: Message, state: FSMContext):
         await state.clear()
         await message.reply("Cancelled.")
         return
-    from utilitybot.modules.rss.handlers import is_valid_feed_url
+    from modules.rss.handlers import is_valid_feed_url
     if not await is_valid_feed_url(message.text):
         await message.reply("Invalid RSS Feed URL. Make sure it starts with http/https and is a valid feed.\nTry again:", reply_markup=get_cancel_kb("rss_cancel_fsm"))
         return
@@ -373,7 +373,7 @@ async def process_add_feed(message: Message, state: FSMContext):
     data = await state.get_data()
     chat_id = data['chat_id']
     await db.add_rss_feed(chat_id, message.text)
-    from utilitybot.modules.rss.handlers import _mark_all_existing_items
+    from modules.rss.handlers import _mark_all_existing_items
     await _mark_all_existing_items(chat_id, message.text)
     await state.clear()
 
@@ -620,7 +620,7 @@ async def send_latest_prompt(cb: CallbackQuery):
     # Answer immediately — Telegram requires a response within 10s or it shows an error
     await cb.answer("📤 Sending latest post in background…", show_alert=False)
 
-    from utilitybot.modules.rss.service import send_latest_item
+    from modules.rss.service import send_latest_item
     import asyncio
     bot = cb.bot
     owner_chat = cb.from_user.id
