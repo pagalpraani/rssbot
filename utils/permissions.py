@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Permissions
-# Path: utilitybot/utils/permissions.py
+# Path: utils/permissions.py
 # Description: Utility functions and helpers for operations related to Permissions.
 # =============================================================================
 
@@ -8,9 +8,9 @@ from functools import wraps
 from aiogram.types import Message
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
-from .. import config
-from . import admin_cache
-from ..utils.logger import get_logger
+import config
+from utils import admin_cache
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 
