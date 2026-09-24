@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Helpers
-# Path: utilitybot/utils/helpers.py
+# Path: utils/helpers.py
 # Description: Utility functions and helpers for operations related to Helpers.
 # Scope: private | channel
 # =============================================================================
@@ -11,9 +11,9 @@ import asyncio
 import html
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from ..database.mongodb import db
-from . import settings_cache
-from ..utils.logger import get_logger
+from database.mongodb import db
+from utils import settings_cache
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 
