@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Rate Limit Middleware
-# Path: utilitybot/utils/rate_limit_middleware.py
+# Path: utils/rate_limit_middleware.py
 # Description: Per-user rate limiting middleware for messages and callbacks.
 #              Two separate classes — registered on dp.message and
 #              dp.callback_query respectively — matching the pattern used
@@ -13,7 +13,7 @@ from typing import Any, Callable, Awaitable
 
 from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery, TelegramObject
-from utilitybot.utils.logger import log
+from utils.logger import log
 
 # ── Tunables ──────────────────────────────────────────────────────────────────
 _MESSAGE_MIN_INTERVAL  = 0.5   # 500 ms between messages from the same user
