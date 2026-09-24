@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Scheduler
-# Path: utilitybot/utils/scheduler.py
+# Path: utils/scheduler.py
 # Description: Background polling loop that periodically asks the RSS service
 #              to check every feed and dispatch new items. Per-feed frequency
 #              is controlled by each feed's own configured interval (see
@@ -12,7 +12,7 @@
 import asyncio
 from typing import Optional
 from aiogram import Bot
-from ..utils.logger import get_logger
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 
@@ -34,7 +34,7 @@ async def _poll_loop():
     # (rss.service imports from the database layer, which is fine, but
     # importing at the top of this file would run before the app has
     # finished wiring everything up).
-    from ..modules.rss.service import fetch_and_process_feeds
+    from modules.rss.service import fetch_and_process_feeds
 
     log.info(f"RSS polling loop started (checking every {POLL_INTERVAL_SECONDS}s).")
     while True:
