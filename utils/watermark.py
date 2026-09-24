@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: Watermark Engine
-# Path: utilitybot/utils/watermark.py
+# Path: utils/watermark.py
 # Description: Global utility for manipulating Images and PDFs. Overlays transparent
 #              logos, applies custom URI hyperlinked footernotes, and extracts PDF
 #              thumbnails dynamically utilizing Pillow and PyMuPDF (fitz).
@@ -15,7 +15,7 @@ import threading
 import concurrent.futures
 import collections
 from PIL import Image, UnidentifiedImageError
-from utilitybot.utils.logger import log
+from utils.logger import log
 
 # ---------------------------------------------------------------------------
 # Dedicated thread pool for CPU-bound watermark work.
