@@ -44,6 +44,7 @@ HelpRegistry.register(
     "- /admincache: Clear admin cache.\n"
     "- /privacycheck: Check permission visibility.\n"
     "- /userinfo: Get stored user data.\n"
+    "- /chatreport: Export all active chats + subscribed feeds as a .txt file.\n"
     "- /ping: Check bot response time.\n\n",
     supported_chat_types=["dev"]
 )
