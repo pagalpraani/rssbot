@@ -1,4 +1,7 @@
-# utilitybot/modules/replacements/__init__.py
+# =============================================================================
+# Module: Replacements Init
+# Path: modules/replacements/__init__.py
+# =============================================================================
 
 from .handlers import router
 
