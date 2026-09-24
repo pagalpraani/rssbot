@@ -1,5 +1,5 @@
 # =============================================================================
-# Module: requirements.txt
+# Module: Requirements
 # Path: requirements.txt
 # Description: Project dependencies mapping required pip packages and their versions.
 # =============================================================================
