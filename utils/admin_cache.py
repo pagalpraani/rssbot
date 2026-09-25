@@ -31,11 +31,6 @@ def set_admin_ids(chat_id: int, admin_ids: Set[int]) -> None:
     _admin_cache[chat_id] = (time.monotonic(), admin_ids)
 
 
-def clear_cache() -> None:
-    """Clear the entire admin cache (e.g. on bot restart)."""
-    _admin_cache.clear()
-
-
 def clear_chat_cache(chat_id: int) -> None:
     """Invalidate cache for a single chat (e.g. after admin change)."""
     _admin_cache.pop(chat_id, None)
