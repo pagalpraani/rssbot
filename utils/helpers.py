@@ -6,13 +6,10 @@
 # =============================================================================
 
 from aiogram.types import Message, User
-from typing import List, Optional
-import asyncio
+from typing import Optional
 import html
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from database.mongodb import db
-from utils import settings_cache
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -40,41 +37,6 @@ async def reply_to_owner(
             )
         except Exception:
             pass
-
-async def check_user_membership(bot: Bot, user_id: int, channel: str) -> bool:
-    """
-    Checks if a user is a member of a given channel.
-    Cache-first: avoids a Telegram API call on every message.
-    """
-    cached = settings_cache.get_membership(user_id, channel)
-    if cached is not None:
-        return cached
-    try:
-        member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
-        result = member.status not in ["left", "kicked"]
-    except TelegramAPIError as e:
-        log.error(f"Error checking membership for user {user_id} in channel {channel}: {e}")
-        result = False
-    except Exception as e:
-        log.error(f"An unexpected error occurred while checking membership: {e}")
-        result = False
-    settings_cache.set_membership(user_id, channel, result)
-    return result
-
-
-async def check_all_memberships(bot: Bot, user_id: int, channels: List[str]) -> List[str]:
-    """
-    Checks membership in all channels concurrently.
-    Returns list of channels the user is NOT a member of.
-    """
-    results = await asyncio.gather(
-        *[check_user_membership(bot, user_id, ch) for ch in channels],
-        return_exceptions=True,
-    )
-    # res is True  → user IS a member     → don't include (no action needed)
-    # res is False → user is NOT a member → include (must enforce)
-    # res is Exception → API error        → include (fail-safe: enforce)
-    return [ch for ch, res in zip(channels, results) if res is not True]
 
 async def get_target_user(bot: Bot, message: Message, args: list) -> Optional[User]:
     """
