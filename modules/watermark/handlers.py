@@ -37,7 +37,7 @@ HelpRegistry.register(
     "- <b>PDF Thumbnail:</b> Generate a visual thumbnail from the first page of PDFs.\n\n"
     "<b>Notes:</b>\n"
     "- Works in channels, groups, and supergroups.\n"
-    "- Watermark settings apply to /repost, /post, and RSS feed posts.\n"
+    "- Watermark settings apply to RSS feed posts.\n"
     "- Logo must be a PNG document (not a compressed photo) for best results.",
     supported_chat_types=["channel", "group", "supergroup"]
 )
