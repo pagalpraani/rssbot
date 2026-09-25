@@ -48,6 +48,7 @@ HelpRegistry.register(
     "- /ping: Check bot response time.\n\n",
     supported_chat_types=["dev"]
 )
+@router.message(Command("echo", "say", prefix="!/"), F.chat.type == "private")
 @owner_only
 async def echo_command(message: types.Message, bot: Bot):
     text_to_send = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else ""
@@ -93,7 +94,7 @@ async def privacy_check_command(message: Message, bot: Bot):
     else:
         reply_text = (
             "❌ <b>Privacy mode is ON.</b>\n\n"
-            "I can only see commands and direct mentions. Features like Night Mode won't work.\n\n"
+            "I can only see commands and direct mentions.\n\n"
             "<b>To fix:</b> Go to @BotFather > /mybots > Settings > Group Privacy > Turn off."
         )
     await reply_to_owner(message, reply_text, parse_mode="HTML")
@@ -109,7 +110,6 @@ async def id_command(message: Message):
     await reply_to_owner(message, text, parse_mode="HTML")
 
 @router.channel_post(Command("id"))
-@owner_only
 async def id_command_channel(message: Message):
     # Channel posts arrive as a separate update type from regular messages —
     # this handler is what makes /id actually work when posted in a channel.
